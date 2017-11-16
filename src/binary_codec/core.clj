@@ -3,17 +3,20 @@
                      ByteOrder))
   (:require [clojure.spec.alpha :as s]))
 
-(def byteorders {:endian/little ByteOrder/LITTLE_ENDIAN
-                 :endian/big ByteOrder/BIG_ENDIAN
-                 :endian/native (ByteOrder/nativeOrder)
-                 :endian/network ByteOrder/BIG_ENDIAN})
-
-(defrecord Encoder [data op size alignment])
-
 (defprotocol Codec
-  (to-encoder* [this data alignment] "Validates and processes a given piece of data, returning an Encoder")
-  (decoder* [this] "I don't know what this function will look like"))
+  (alignment*     [this encoding] "The alignment of this codec with a given encoding")
+  (sizeof*        [this encoding data] "Given a piece of data, and an encoding, 
+                                       what is the number of bytes that it will fill")
+  (to-buffer!*    [this encoding data buffer] "Serialize data to a passed in buffer, based on the
+                                              associated encoding")
+  (from-buffer!*  [this encoding buffer] "Deserialize from a binary buffer to data, based on the
+                                         associated encoding"))
 
+(defn codec?
+  "returns c if c is a codec, else false"
+  [c]
+  (and (extends? Codec (class c)) c))
+ 
 
 (defonce ^:private registry-ref (atom {}))
 
@@ -27,7 +30,7 @@
 
 (defn- named? [x] (instance? clojure.lang.Named x))
 
-(defn- reg-resolve
+(defn reg-resolve
     "returns the codec end of alias chain starting with k, nil if not found, k if k not Named"
     [k]
     (if (named? k)
@@ -40,38 +43,61 @@
       k))
 
 (defmacro def 
-  "Macro used to add codecs to a spec style registry.  If a specification
-  is supplied, then it will be defined in spec as well.  If no spec is passed
-  and there is nothing in the spec registry, then identity will be used"
-  ([k codec] 
+  "Macro used to define a global codec, a la spec.  It takes a fully qualified keyword
+  as and a codec, and adds that codec to the registry"
+  [k codec] 
    `(do
       (swap! registry-ref assoc ~k ~codec)
-      (if (not (s/get-spec k))
-        (s/def ~k identity))
       ~k))
-  ([k codec spec]
-    `(do
-      (swap! registry-ref assoc ~k ~codec)
-      (if (not= ~k ~spec)
-        (s/def ~k ~spec))
-      ~k)))
 
-(s/def ::foo even?)
+(s/def ::word-size #{0 1 2 3 4 8})
+
+(s/def ::base-encoding (s/keys :req [::word-size]))
+
+(def base-encoding {::word-size 0})
+
+(defn alignment
+  ([codec-or-k] (alignment codec-or-k base-encoding))
+  ([codec-or-k encoding] 
+   (if-let [codec (reg-resolve codec-or-k)]
+     (alignment* codec encoding)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
+
+(defn sizeof 
+  ([codec-or-k] (sizeof codec-or-k base-encoding nil))
+  ([codec-or-k encoding] (sizeof codec-or-k encoding nil))
+  ([codec-or-k encoding data]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (sizeof* codec encoding data)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
+
+(defn to-buffer!
+  ([codec-or-k data buffer] (to-buffer! codec-or-k base-encoding data buffer))
+  ([codec-or-k encoding data buffer]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (to-buffer!* codec encoding data buffer)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
+
+(defn from-buffer!
+  ([codec-or-k buffer] (from-buffer! codec-or-k base-encoding buffer))
+  ([codec-or-k encoding buffer]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (from-buffer!* codec encoding buffer)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (binary-codec.core/def ::int8 
+; (def ::int8 
   (reify Codec
-    (to-encoder* [_ data alignment] )
-    (decoder* [_] ))
-   (s/conformer #(try (byte %) (catch IllegalArgumentException e ::s/invalid))))
+    (alignment* [_ _] 1)
+    (sizeof* [_ _ _] Byte/BYTES)
+    (to-buffer!* [_ _ data buffer] (.put buffer data))
+    (from-buffer!* [_ _ buffer] (.get buffer))))
  
 ; (def int16
 ;   (reify Codec
 ;     (alignment [_ encoding] (Byte/BYTES))
 ;     (to-bytes [_ encoding data] (byte-array [data]))
 ;     (from-bytes [_ encoding binary] [(first binary) (rest binary)])))
-
-(defn to-encoder [codec-or-k]
-  (let [codec (reg-resolve codec-or-k)]
 
 
 
