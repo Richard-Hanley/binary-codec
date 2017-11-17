@@ -12,6 +12,21 @@
   (from-buffer!*  [this encoding buffer] "Deserialize from a binary buffer to data, based on the
                                          associated encoding"))
 
+(defn- align-buffer-write [align-to buffer]
+  (if-not (zero? align-to)
+    (let [position (.position buffer)
+          padding (- align-to (mod position align-to))]
+      (dotimes [n padding] 
+        (.put buffer (byte 0))))))
+
+(defn- align-buffer-read [align-to buffer]
+  (if-not (zero? align-to)
+    (let [position (.position buffer)
+          padding (mod position align-to)]
+      (dotimes [n padding] 
+        (println "reading a byte of padding")
+        (.get buffer (byte 0))))))
+
 (defn codec?
   "returns c if c is a codec, else false"
   [c]
@@ -75,14 +90,18 @@
   ([codec-or-k data buffer] (to-buffer! codec-or-k base-encoding data buffer))
   ([codec-or-k encoding data buffer]
    (if-let [codec (reg-resolve codec-or-k)]
-     (to-buffer!* codec encoding data buffer)
+     (do
+       (align-buffer-write (alignment* codec encoding) buffer)
+       (to-buffer!* codec encoding data buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn from-buffer!
   ([codec-or-k buffer] (from-buffer! codec-or-k base-encoding buffer))
   ([codec-or-k encoding buffer]
    (if-let [codec (reg-resolve codec-or-k)]
-     (from-buffer!* codec encoding buffer)
+     (do
+       (align-buffer-read (alignment* codec encoding) buffer)
+       (from-buffer!* codec encoding buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (binary-codec.core/def ::int8 
@@ -118,16 +137,3 @@
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
     (from-buffer!* [_ _ buffer] (.getLong buffer))))
-
-; (def int16
-;   (reify Codec
-;     (alignment [_ encoding] (Byte/BYTES))
-;     (to-bytes [_ encoding data] (byte-array [data]))
-;     (from-bytes [_ encoding binary] [(first binary) (rest binary)])))
-
-
-
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (println x "Hello, World!"))
