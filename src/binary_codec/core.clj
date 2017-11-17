@@ -86,13 +86,33 @@
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (binary-codec.core/def ::int8 
-; (def ::int8 
   (reify Codec
-    (alignment* [_ _] 1)
+    (alignment* [_ _] Byte/BYTES)
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer))))
  
+(binary-codec.core/def ::int16
+  (reify Codec
+    (alignment* [_ _] Short/BYTES)
+    (sizeof* [_ _ _] Short/BYTES)
+    (to-buffer!* [_ _ data buffer] (.putShort buffer data))
+    (from-buffer!* [_ _ buffer] (.getShort buffer))))
+ 
+(binary-codec.core/def ::int32
+  (reify Codec
+    (alignment* [_ _] Integer/BYTES)
+    (sizeof* [_ _ _] Integer/BYTES)
+    (to-buffer!* [_ _ data buffer] (.putInt buffer data))
+    (from-buffer!* [_ _ buffer] (.getInt buffer))))
+
+(binary-codec.core/def ::int64
+  (reify Codec
+    (alignment* [_ _] Long/BYTES)
+    (sizeof* [_ _ _] Long/BYTES)
+    (to-buffer!* [_ _ data buffer] (.putLong buffer data))
+    (from-buffer!* [_ _ buffer] (.getLong buffer))))
+
 ; (def int16
 ;   (reify Codec
 ;     (alignment [_ encoding] (Byte/BYTES))
