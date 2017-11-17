@@ -87,7 +87,7 @@
 
 (binary-codec.core/def ::int8 
   (reify Codec
-    (alignment* [_ _] Byte/BYTES)
+    (alignment* [_ _] 0)
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer))))
