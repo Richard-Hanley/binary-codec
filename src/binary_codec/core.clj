@@ -50,7 +50,7 @@
       (swap! registry-ref assoc ~k ~codec)
       ~k))
 
-(s/def ::word-size #{0 1 2 3 4 8})
+(s/def ::word-size #{0 1 2 4 8})
 
 (s/def ::base-encoding (s/keys :req [::word-size]))
 
@@ -94,21 +94,27 @@
  
 (binary-codec.core/def ::int16
   (reify Codec
-    (alignment* [_ _] Short/BYTES)
+    (alignment* [_ encoding] 
+      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+        (min word-size Short/BYTES)))
     (sizeof* [_ _ _] Short/BYTES)
     (to-buffer!* [_ _ data buffer] (.putShort buffer data))
     (from-buffer!* [_ _ buffer] (.getShort buffer))))
  
 (binary-codec.core/def ::int32
   (reify Codec
-    (alignment* [_ _] Integer/BYTES)
+    (alignment* [_ encoding]
+      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+        (min word-size Integer/BYTES)))
     (sizeof* [_ _ _] Integer/BYTES)
     (to-buffer!* [_ _ data buffer] (.putInt buffer data))
     (from-buffer!* [_ _ buffer] (.getInt buffer))))
 
 (binary-codec.core/def ::int64
   (reify Codec
-    (alignment* [_ _] Long/BYTES)
+    (alignment* [_ encoding]
+      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+        (min word-size Long/BYTES)))
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
     (from-buffer!* [_ _ buffer] (.getLong buffer))))
