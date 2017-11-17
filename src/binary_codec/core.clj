@@ -57,13 +57,14 @@
               (with-name spec k)))))
       k))
 
-(defmacro def 
+
+(defn def 
   "Macro used to define a global codec, a la spec.  It takes a fully qualified keyword
   as and a codec, and adds that codec to the registry"
   [k codec] 
-   `(do
-      (swap! registry-ref assoc ~k ~codec)
-      ~k))
+   (do
+      (swap! registry-ref assoc k codec)
+      k))
 
 (s/def ::word-size #{0 1 2 4 8})
 
@@ -137,3 +138,24 @@
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
     (from-buffer!* [_ _ buffer] (.getLong buffer))))
+
+
+(defn lazy-pad
+    "Returns a lazy sequence which pads sequence with pad-value."
+    [sequence pad-value]
+    (if (empty? sequence)
+          (repeat pad-value)
+          (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
+
+(defn codec-tuple [codecs]
+  (reify Codec
+    (alignment* [_ encoding] (apply max (map #(alignment % encoding) codecs)))
+    (sizeof* [_ encoding data] 
+      (reduce + (map #(sizeof %1 encoding %2) codecs (lazy-pad data nil))))
+    (to-buffer!* [_ encoding data buffer] 
+      (doseq [[codec elem] (map vector codecs data)]
+        (to-buffer! codec encoding elem buffer))
+      buffer)
+    (from-buffer!* [_ encoding buffer]
+      (into [] (doall (map #(from-buffer! % encoding buffer) codecs))))))
+                     
