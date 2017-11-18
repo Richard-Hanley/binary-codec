@@ -164,5 +164,15 @@
     (testing "1 byte alignment" (is (= 11 (sizeof ::tfoo {::codec/word-size 1}))))
     (testing "2 byte alignment" (is (= 12 (sizeof ::tfoo {::codec/word-size 2}))))
     (testing "4 byte alignment" (is (= 14 (sizeof ::tfoo {::codec/word-size 4}))))
-    (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::codec/word-size 8}))))
-    ))
+    (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::codec/word-size 8})))))
+  (testing "buffer writing and reading"
+    (let [data [(byte 25) (long 0x31337DEADBEEF) (short 754)]
+          buffer (.flip 
+                   (to-buffer! ::tfoo codec/base-encoding data (ByteBuffer/allocate 40)))]
+      (is (= data (from-buffer! ::tfoo codec/base-encoding buffer))))))
+
+(deftest test-keys
+    (let [data {::bane (short 754) ::baz (long 0x31337DEADBEEF) ::bar (byte 15)}
+          buffer (.flip 
+                   (to-buffer! ::mfoo codec/base-encoding data (ByteBuffer/allocate 40)))]
+      (is (= data (from-buffer! ::mfoo codec/base-encoding buffer)))))
