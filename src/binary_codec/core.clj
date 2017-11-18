@@ -159,3 +159,16 @@
     (from-buffer!* [_ encoding buffer]
       (into [] (doall (map #(from-buffer! % encoding buffer) codecs))))))
                      
+(defn codec-map 
+  "Takes a sequence of codec keywords, and returns a codec that reads/writes maps.
+  The codecs must be fully namespaced keywords that are in the codec registry"
+  [codecs]
+  (let [tuple (codec-tuple codecs)]
+    (reify Codec
+      (alignment* [_ encoding] (alignment* tuple encoding))
+      (sizeof* [_ encoding data] (sizeof* tuple encoding data))
+      (to-buffer!* [_ encoding data buffer]
+        (to-buffer!* tuple encoding (map #(% data) codecs) buffer))
+      (from-buffer!* [_ encoding buffer]
+        (let [values (from-buffer!* tuple encoding buffer)]
+          (into {} (map vector codecs values)))))))
