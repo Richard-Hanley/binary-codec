@@ -144,3 +144,25 @@
           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
     ))
+
+; Define some codecs for the tuple and map test
+(codec/def ::bar ::codec/int8)
+(codec/def ::baz ::codec/int64)
+(codec/def ::bane ::codec/int16)
+
+(codec/def ::tfoo (codec/tuple [::bar ::baz ::bane]))
+(codec/def ::mfoo (codec/keys [::bar ::baz ::bane]))
+
+(deftest test-tuples
+  (testing "alignment"
+    (testing "1 byte" (is (= 1 (alignment ::tfoo {::codec/word-size 1}))))
+    (testing "2 byte" (is (= 2 (alignment ::tfoo {::codec/word-size 2}))))
+    (testing "4 byte" (is (= 4 (alignment ::tfoo {::codec/word-size 4}))))
+    (testing "8 byte" (is (= 8 (alignment ::tfoo {::codec/word-size 8})))))
+  (testing "sizeof"
+    (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
+    (testing "1 byte alignment" (is (= 11 (sizeof ::tfoo {::codec/word-size 1}))))
+    (testing "2 byte alignment" (is (= 12 (sizeof ::tfoo {::codec/word-size 2}))))
+    (testing "4 byte alignment" (is (= 14 (sizeof ::tfoo {::codec/word-size 4}))))
+    (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::codec/word-size 8}))))
+    ))

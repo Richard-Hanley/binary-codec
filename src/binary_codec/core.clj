@@ -3,6 +3,8 @@
                      ByteOrder))
   (:require [clojure.spec.alpha :as s]))
 
+(alias 'c 'clojure.core)
+
 (defprotocol Codec
   (alignment*     [this encoding] "The alignment of this codec with a given encoding")
   (sizeof*        [this encoding data] "Given a piece of data, and an encoding, 
@@ -12,20 +14,25 @@
   (from-buffer!*  [this encoding buffer] "Deserialize from a binary buffer to data, based on the
                                          associated encoding"))
 
-(defn- align-buffer-write [align-to buffer]
+(defn alignment-padding [align-to position]
   (if-not (zero? align-to)
-    (let [position (.position buffer)
-          padding (- align-to (mod position align-to))]
-      (dotimes [n padding] 
-        (.put buffer (byte 0))))))
+    (let [offset (mod position align-to)]
+      (if-not (zero? offset)
+        (- align-to offset)
+        0))
+    0))
+
+(defn- align-buffer-write [align-to buffer]
+  (let [position (.position buffer)
+        padding (alignment-padding align-to position)]
+    (dotimes [n padding]
+      (.put buffer (byte 0)))))
 
 (defn- align-buffer-read [align-to buffer]
-  (if-not (zero? align-to)
-    (let [position (.position buffer)
-          padding (mod position align-to)]
-      (dotimes [n padding] 
-        (println "reading a byte of padding")
-        (.get buffer (byte 0))))))
+  (let [position (.position buffer)
+        padding (alignment-padding align-to position)]
+    (dotimes [n padding] 
+      (.get buffer))))
 
 (defn codec?
   "returns c if c is a codec, else false"
@@ -147,11 +154,17 @@
           (repeat pad-value)
           (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
-(defn codec-tuple [codecs]
+(defn tuple [codecs]
   (reify Codec
     (alignment* [_ encoding] (apply max (map #(alignment % encoding) codecs)))
-    (sizeof* [_ encoding data] 
-      (reduce + (map #(sizeof %1 encoding %2) codecs (lazy-pad data nil))))
+    (sizeof* [_ encoding data]
+      (reduce 
+        (fn [accum [codec elem]]
+          (if-let [size (sizeof codec encoding elem)]
+            (+ accum size (alignment-padding (alignment codec encoding) accum))
+            (reduced nil)))
+        0
+        (map vector codecs (lazy-pad data nil))))
     (to-buffer!* [_ encoding data buffer] 
       (doseq [[codec elem] (map vector codecs data)]
         (to-buffer! codec encoding elem buffer))
@@ -159,16 +172,17 @@
     (from-buffer!* [_ encoding buffer]
       (into [] (doall (map #(from-buffer! % encoding buffer) codecs))))))
                      
-(defn codec-map 
+(defn keys
   "Takes a sequence of codec keywords, and returns a codec that reads/writes maps.
   The codecs must be fully namespaced keywords that are in the codec registry"
   [codecs]
-  (let [tuple (codec-tuple codecs)]
+  (let [base-tuple (tuple codecs)
+        data-to-seq (fn [data] (map #(% data) codecs))]
     (reify Codec
-      (alignment* [_ encoding] (alignment* tuple encoding))
-      (sizeof* [_ encoding data] (sizeof* tuple encoding data))
+      (alignment* [_ encoding] (alignment* base-tuple encoding))
+      (sizeof* [_ encoding data] (sizeof* base-tuple encoding (data-to-seq data)))
       (to-buffer!* [_ encoding data buffer]
-        (to-buffer!* tuple encoding (map #(% data) codecs) buffer))
+        (to-buffer!* base-tuple encoding (data-to-seq data) buffer))
       (from-buffer!* [_ encoding buffer]
-        (let [values (from-buffer!* tuple encoding buffer)]
+        (let [values (from-buffer!* base-tuple encoding buffer)]
           (into {} (map vector codecs values)))))))
