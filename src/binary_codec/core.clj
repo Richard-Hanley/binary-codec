@@ -34,6 +34,26 @@
     (dotimes [n padding] 
       (.get buffer))))
 
+(defn- make-signed-integral-conformer [checked-converter]
+  (s/conformer (fn [value]
+                 (try 
+                   (checked-converter value)
+                   (catch Exception e ::s/invalid)))))
+
+(defn- make-unsigned-integral-conformer [bit-length checked-converter unchecked-converter]
+    (let [shift-value (- Long/SIZE bit-length)
+          sized-bitmask (unsigned-bit-shift-right -1 shift-value)]
+      (s/conformer 
+        (fn [value]
+                     
+          (try 
+            (checked-converter value)
+            (catch IllegalArgumentException e 
+              (if (= (bit-and value sized-bitmask) value)
+                (unchecked-converter value)
+                ::s/invalid))
+            (catch Exception e ::s/invalid))))))
+
 (defn codec?
   "returns c if c is a codec, else false"
   [c]
@@ -118,6 +138,7 @@
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer))))
+(s/def ::int8 (make-signed-integral-conformer byte))
  
 (binary-codec.core/def ::int16
   (reify Codec
@@ -127,6 +148,7 @@
     (sizeof* [_ _ _] Short/BYTES)
     (to-buffer!* [_ _ data buffer] (.putShort buffer data))
     (from-buffer!* [_ _ buffer] (.getShort buffer))))
+(s/def ::int16 (make-signed-integral-conformer short))
  
 (binary-codec.core/def ::int32
   (reify Codec
@@ -136,6 +158,7 @@
     (sizeof* [_ _ _] Integer/BYTES)
     (to-buffer!* [_ _ data buffer] (.putInt buffer data))
     (from-buffer!* [_ _ buffer] (.getInt buffer))))
+(s/def ::int32 (make-signed-integral-conformer int))
 
 (binary-codec.core/def ::int64
   (reify Codec
@@ -145,7 +168,17 @@
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
     (from-buffer!* [_ _ buffer] (.getLong buffer))))
+(s/def ::int64 (make-signed-integral-conformer long))
 
+(binary-codec.core/def ::uint8 ::int8)
+(s/def ::uint8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
+
+(binary-codec.core/def ::uint16 ::int16)
+(s/def ::uint16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
+
+(binary-codec.core/def ::uint32 ::int32)
+(s/def ::uint32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
+                 
 
 (defn lazy-pad
     "Returns a lazy sequence which pads sequence with pad-value."

@@ -1,8 +1,105 @@
 (ns binary-codec.core-test
   (:import (java.nio ByteBuffer
                      ByteOrder))
-  (:require [clojure.test :refer :all]
+  (:require [clojure.spec.alpha :as s]
+            [clojure.test :refer :all]
             [binary-codec.core :as codec :refer :all]))
+
+(deftest test-integral-conformers
+  (testing "signed conversions"
+    (testing "int8"
+      (testing "zero"
+        (is (= Byte (type (s/conform ::codec/int8 0))))
+        (is (= 0 (s/conform ::codec/int8 0))))
+      (testing "middle value"
+        (is (= Byte (type (s/conform ::codec/int8 15))))
+        (is (= 15 (s/conform ::codec/int8 15))))
+      (testing "max value"
+        (is (= Byte (type (s/conform ::codec/int8 127))))
+        (is (= 127 (s/conform ::codec/int8 127))))
+      (testing "min value"
+        (is (= Byte (type (s/conform ::codec/int8 -128))))
+        (is (= -128 (s/conform ::codec/int8 -128))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/int8 128)))
+        (is (= ::s/invalid (s/conform ::codec/int8 -129)))
+        (is (= ::s/invalid (s/conform ::codec/int8 256)))))
+    (testing "int16"
+      (testing "zero"
+        (is (= Short (type (s/conform ::codec/int16 0))))
+        (is (= 0 (s/conform ::codec/int16 0))))
+      (testing "middle value"
+        (is (= Short (type (s/conform ::codec/int16 15))))
+        (is (= 15 (s/conform ::codec/int16 15))))
+        (is (= Short (type (s/conform ::codec/int16 752))))
+        (is (= 752 (s/conform ::codec/int16 752))))
+      (testing "max value"
+        (is (= Short (type (s/conform ::codec/int16 32767))))
+        (is (= 32767 (s/conform ::codec/int16 32767))))
+      (testing "min value"
+        (is (= Short (type (s/conform ::codec/int16 -32768))))
+        (is (= -32768 (s/conform ::codec/int16 -32768))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/int16 0xFFFF)))
+        (is (= ::s/invalid (s/conform ::codec/int16 0x10000)))
+        (is (= ::s/invalid (s/conform ::codec/int16 32768)))
+        (is (= ::s/invalid (s/conform ::codec/int16 -32769)))))
+  (testing "unsigned conversions"
+    (testing "uint8"
+      (testing "zero"
+        (is (= Byte (type (s/conform ::codec/uint8 0))))
+        (is (= 0 (s/conform ::codec/uint8 0))))
+      (testing "middle value"
+        (is (= Byte (type (s/conform ::codec/uint8 15))))
+        (is (= 15 (s/conform ::codec/uint8 15))))
+      (testing "max value"
+        (is (= Byte (type (s/conform ::codec/uint8 255))))
+        (is (= -1 (s/conform ::codec/uint8 255))))
+      (testing "min value"
+        (is (= Byte (type (s/conform ::codec/uint8 -128))))
+        (is (= -128 (s/conform ::codec/uint8 -128))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/uint8 -129)))
+        (is (= ::s/invalid (s/conform ::codec/uint8 256)))))
+    (testing "uint16"
+      (testing "zero"
+        (is (= Short (type (s/conform ::codec/uint16 0))))
+        (is (= 0 (s/conform ::codec/uint16 0))))
+      (testing "middle value"
+        (is (= Short (type (s/conform ::codec/uint16 15))))
+        (is (= 15 (s/conform ::codec/uint16 15)))
+        (is (= Short (type (s/conform ::codec/uint16 752))))
+        (is (= 752 (s/conform ::codec/uint16 752))))
+      (testing "max value"
+        (is (= Short (type (s/conform ::codec/uint16 0xFFFF))))
+        (is (= -1 (s/conform ::codec/uint16 0xFFFF))))
+      (testing "min value"
+        (is (= Short (type (s/conform ::codec/uint16 -32768))))
+        (is (= -32768 (s/conform ::codec/uint16 -32768))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/uint16 0x10000)))
+        (is (= ::s/invalid (s/conform ::codec/uint16 -32769)))))
+ (testing "uint32"
+      (testing "zero"
+        (is (= Integer (type (s/conform ::codec/uint32 0))))
+        (is (= 0 (s/conform ::codec/uint32 0))))
+      (testing "middle value"
+        (is (= Integer (type (s/conform ::codec/uint32 15))))
+        (is (= 15 (s/conform ::codec/uint32 15))))
+        (is (= Integer (type (s/conform ::codec/uint32 752))))
+        (is (= 752 (s/conform ::codec/uint32 752))))
+      (testing "max value"
+        (is (= Integer (type (s/conform ::codec/uint32 0xFFFFFFFF))))
+        (is (= -1 (s/conform ::codec/uint32 0xFFFFFFFF))))
+      (testing "min value"
+        (is (= Integer (type (s/conform ::codec/uint32 -2147483648))))
+        (is (= -2147483648 (s/conform ::codec/uint32 -2147483648))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/uint32 0x100000000)))
+        (is (= ::s/invalid (s/conform ::codec/uint32 -2147483649))))
+
+))
+
 
 (deftest test-numerical-sizes
   (is (= 1 (codec/sizeof ::codec/int8)))
