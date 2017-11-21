@@ -178,7 +178,6 @@
 
 (binary-codec.core/def ::uint32 ::int32)
 (s/def ::uint32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
-                 
 
 (defn lazy-pad
     "Returns a lazy sequence which pads sequence with pad-value."
@@ -219,3 +218,54 @@
       (from-buffer!* [_ encoding buffer]
         (let [values (from-buffer!* base-tuple encoding buffer)]
           (into {} (map vector codecs values)))))))
+
+(defn array
+  ([codec])
+  ([codec count])
+  ([codec min-count max-count]))
+
+(defn align [alignment-value codec]
+  "Creates a wrapper around the passed codec that forces the word-size to be the given value"
+  (reify Codec
+    (alignment*[_ encoding] (alignment codec (assoc encoding ::word-size alignment-value)))
+    (sizeof* [_ encoding data] (sizeof* codec (assoc encoding ::word-size alignment-value) data))
+    (to-buffer!* [_ encoding data buffer] (to-buffer!* codec (assoc encoding ::word-size alignment-value) data buffer))
+    (from-buffer!* [_ encoding buffer] (from-buffer!* codec (assoc encoding ::word-size alignment-value) buffer))))
+
+(defn unaligned [codec]
+  "Creates a wrapper around the passed codec that forces the word-size to be 0"
+  (reify Codec
+    (alignment*[_ encoding] (alignment codec (assoc encoding ::word-size 0)))
+    (sizeof* [_ encoding data] (sizeof codec (assoc encoding ::word-size 0) data))
+    (to-buffer!* [_ encoding data buffer] (to-buffer! codec (assoc encoding ::word-size 0) data buffer))
+    (from-buffer!* [_ encoding buffer] (from-buffer! codec (assoc encoding ::word-size 0) buffer))))
+
+(def byte-orders {:endian/little ByteOrder/LITTLE_ENDIAN
+                 :endian/big ByteOrder/BIG_ENDIAN
+                 :endian/network ByteOrder/BIG_ENDIAN
+                 :endian/native (ByteOrder/nativeOrder)})
+
+(defn force-byte-order [order codec]
+  "Creates a wrapper for the passed codec that forces byte buffers to be in specific byte order.
+  The order can either be a java.nio.ByteOrder object, or it could be a keyword from the byte-order
+  map.  Supported keywords are :endian/little :endian/big :endian/network :endian/native"
+  (let [byteorder (if (keyword? order)
+                     (order byte-orders)
+                     order)]
+    (reify Codec
+      (alignment*[_ encoding] (alignment codec encoding))
+      (sizeof* [_ encoding data] (sizeof codec encoding data))
+      (to-buffer!* [_ encoding data buffer] 
+                   (let [prev-order (.order buffer)]
+                     (do
+                       (.order buffer byteorder)
+                       (to-buffer! codec encoding data buffer)
+                       (.order buffer prev-order))))
+      (from-buffer!* [_ encoding buffer]
+                   (let [prev-order (.order buffer)
+                         value (from-buffer! codec encoding (.order buffer byteorder))]
+                     (do
+                       (.order buffer prev-order)
+                       value))))))
+
+
