@@ -57,7 +57,7 @@
 (defn codec?
   "returns c if c is a codec, else false"
   [c]
-  (and (extends? Codec (class c)) c))
+  (and (satisfies? Codec c) c))
 
 
 (defonce ^:private registry-ref (atom {}))
@@ -187,6 +187,7 @@
     (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
 (extend-protocol Codec
+
   clojure.lang.Sequential
   (alignment* [this encoding] (apply max (map #(alignment % encoding) this)))
   (sizeof* [this encoding data]
@@ -202,21 +203,18 @@
       (to-buffer! codec encoding elem buffer))
     buffer)
   (from-buffer!* [this encoding buffer]
-    (into [] (doall (map #(from-buffer! % encoding buffer) this)))))
+    (into [] (doall (map #(from-buffer! % encoding buffer) this))))
 
-(defn keys
-  "Takes a sequence of codec keywords, and returns a codec that reads/writes maps.
-  The codecs must be fully namespaced keywords that are in the codec registry"
-  [codecs]
-  (let [data-to-seq (fn [data] (map #(% data) codecs))]
-    (reify Codec
-      (alignment* [_ encoding] (alignment codecs encoding))
-      (sizeof* [_ encoding data] (sizeof codecs encoding (data-to-seq data)))
-      (to-buffer!* [_ encoding data buffer]
-        (to-buffer! codecs encoding (data-to-seq data) buffer))
-      (from-buffer!* [_ encoding buffer]
-        (let [values (from-buffer! codecs encoding buffer)]
-          (into {} (map vector codecs values)))))))
+  clojure.lang.PersistentArrayMap
+  (alignment* [this encoding] 
+    (alignment (vals this) encoding))
+  (sizeof* [this encoding data] 
+    (sizeof (vals this) encoding (vals data)))
+  (to-buffer!* [this encoding data buffer] 
+    (to-buffer! (vals this) encoding (map #(get data %1) (keys this)) buffer))
+  (from-buffer!* [this encoding buffer] 
+    (let [values (from-buffer! (vals this) encoding buffer)]
+      (into {} (map vector (keys this) values)))))
 
 (defn align [alignment-value codec]
   "Creates a wrapper around the passed codec that forces the word-size to be the given value"

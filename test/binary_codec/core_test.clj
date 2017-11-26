@@ -243,12 +243,12 @@
     ))
 
 ; Define some codecs for the tuple and map test
-(codec/def ::bar ::codec/int8)
-(codec/def ::baz ::codec/int64)
-(codec/def ::bane ::codec/int16)
+; (codec/def ::bar ::codec/int8)
+; (codec/def ::baz ::codec/int64)
+; (codec/def ::bane ::codec/int16)
 
-(codec/def ::tfoo [::bar ::baz ::bane])
-(codec/def ::mfoo (codec/keys [::bar ::baz ::bane]))
+(codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
+(codec/def ::mfoo {::bar ::codec/int8 ::baz ::codec/int64 ::bane ::codec/int16})
 
 (deftest test-seq
   (testing "alignment"
