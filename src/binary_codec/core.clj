@@ -41,57 +41,57 @@
                    (catch Exception e ::s/invalid)))))
 
 (defn- make-unsigned-integral-conformer [bit-length checked-converter unchecked-converter]
-    (let [shift-value (- Long/SIZE bit-length)
-          sized-bitmask (unsigned-bit-shift-right -1 shift-value)]
-      (s/conformer 
-        (fn [value]
-                     
-          (try 
-            (checked-converter value)
-            (catch IllegalArgumentException e 
-              (if (= (bit-and value sized-bitmask) value)
-                (unchecked-converter value)
-                ::s/invalid))
-            (catch Exception e ::s/invalid))))))
+  (let [shift-value (- Long/SIZE bit-length)
+        sized-bitmask (unsigned-bit-shift-right -1 shift-value)]
+    (s/conformer 
+      (fn [value]
+
+        (try 
+          (checked-converter value)
+          (catch IllegalArgumentException e 
+            (if (= (bit-and value sized-bitmask) value)
+              (unchecked-converter value)
+              ::s/invalid))
+          (catch Exception e ::s/invalid))))))
 
 (defn codec?
   "returns c if c is a codec, else false"
   [c]
   (and (extends? Codec (class c)) c))
- 
+
 
 (defonce ^:private registry-ref (atom {}))
 
 (defn registry
-    "returns the registry map, prefer 'get-codec' to lookup a codec by name"
-    []
-    @registry-ref)
+  "returns the registry map, prefer 'get-codec' to lookup a codec by name"
+  []
+  @registry-ref)
 
 (defn- with-name [spec name]
-    (with-meta spec (assoc (meta spec) ::name name)))
+  (with-meta spec (assoc (meta spec) ::name name)))
 
 (defn- named? [x] (instance? clojure.lang.Named x))
 
 (defn reg-resolve
-    "returns the codec end of alias chain starting with k, nil if not found, k if k not Named"
-    [k]
-    (if (named? k)
-      (let [reg @registry-ref]
-        (loop [spec k]
-          (if (named? spec)
-            (recur (get reg spec))
-            (when spec
-              (with-name spec k)))))
-      k))
+  "returns the codec end of alias chain starting with k, nil if not found, k if k not Named"
+  [k]
+  (if (named? k)
+    (let [reg @registry-ref]
+      (loop [spec k]
+        (if (named? spec)
+          (recur (get reg spec))
+          (when spec
+            (with-name spec k)))))
+    k))
 
 
 (defn def 
   "Macro used to define a global codec, a la spec.  It takes a fully qualified keyword
   as and a codec, and adds that codec to the registry"
   [k codec] 
-   (do
-      (swap! registry-ref assoc k codec)
-      k))
+  (do
+    (swap! registry-ref assoc k codec)
+    k))
 
 (s/def ::word-size #{0 1 2 4 8})
 
@@ -139,7 +139,7 @@
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer))))
 (s/def ::int8 (make-signed-integral-conformer byte))
- 
+
 (binary-codec.core/def ::int16
   (reify Codec
     (alignment* [_ encoding] 
@@ -149,7 +149,7 @@
     (to-buffer!* [_ _ data buffer] (.putShort buffer data))
     (from-buffer!* [_ _ buffer] (.getShort buffer))))
 (s/def ::int16 (make-signed-integral-conformer short))
- 
+
 (binary-codec.core/def ::int32
   (reify Codec
     (alignment* [_ encoding]
@@ -180,49 +180,43 @@
 (s/def ::uint32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
 (defn lazy-pad
-    "Returns a lazy sequence which pads sequence with pad-value."
-    [sequence pad-value]
-    (if (empty? sequence)
-          (repeat pad-value)
-          (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
+  "Returns a lazy sequence which pads sequence with pad-value."
+  [sequence pad-value]
+  (if (empty? sequence)
+    (repeat pad-value)
+    (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
-(defn tuple [codecs]
-  (reify Codec
-    (alignment* [_ encoding] (apply max (map #(alignment % encoding) codecs)))
-    (sizeof* [_ encoding data]
-      (reduce 
-        (fn [accum [codec elem]]
-          (if-let [size (sizeof codec encoding elem)]
-            (+ accum size (alignment-padding (alignment codec encoding) accum))
-            (reduced nil)))
-        0
-        (map vector codecs (lazy-pad data nil))))
-    (to-buffer!* [_ encoding data buffer] 
-      (doseq [[codec elem] (map vector codecs data)]
-        (to-buffer! codec encoding elem buffer))
-      buffer)
-    (from-buffer!* [_ encoding buffer]
-      (into [] (doall (map #(from-buffer! % encoding buffer) codecs))))))
-                     
+(extend-protocol Codec
+  clojure.lang.Sequential
+  (alignment* [this encoding] (apply max (map #(alignment % encoding) this)))
+  (sizeof* [this encoding data]
+    (reduce 
+      (fn [accum [codec elem]]
+        (if-let [size (sizeof codec encoding elem)]
+          (+ accum size (alignment-padding (alignment codec encoding) accum))
+          (reduced nil)))
+      0
+      (map vector this (lazy-pad data nil))))
+  (to-buffer!* [this encoding data buffer] 
+    (doseq [[codec elem] (map vector this data)]
+      (to-buffer! codec encoding elem buffer))
+    buffer)
+  (from-buffer!* [this encoding buffer]
+    (into [] (doall (map #(from-buffer! % encoding buffer) this)))))
+
 (defn keys
   "Takes a sequence of codec keywords, and returns a codec that reads/writes maps.
   The codecs must be fully namespaced keywords that are in the codec registry"
   [codecs]
-  (let [base-tuple (tuple codecs)
-        data-to-seq (fn [data] (map #(% data) codecs))]
+  (let [data-to-seq (fn [data] (map #(% data) codecs))]
     (reify Codec
-      (alignment* [_ encoding] (alignment* base-tuple encoding))
-      (sizeof* [_ encoding data] (sizeof* base-tuple encoding (data-to-seq data)))
+      (alignment* [_ encoding] (alignment codecs encoding))
+      (sizeof* [_ encoding data] (sizeof codecs encoding (data-to-seq data)))
       (to-buffer!* [_ encoding data buffer]
-        (to-buffer!* base-tuple encoding (data-to-seq data) buffer))
+        (to-buffer! codecs encoding (data-to-seq data) buffer))
       (from-buffer!* [_ encoding buffer]
-        (let [values (from-buffer!* base-tuple encoding buffer)]
+        (let [values (from-buffer! codecs encoding buffer)]
           (into {} (map vector codecs values)))))))
-
-(defn array
-  ([codec])
-  ([codec count])
-  ([codec min-count max-count]))
 
 (defn align [alignment-value codec]
   "Creates a wrapper around the passed codec that forces the word-size to be the given value"
@@ -241,31 +235,31 @@
     (from-buffer!* [_ encoding buffer] (from-buffer! codec (assoc encoding ::word-size 0) buffer))))
 
 (def byte-orders {:endian/little ByteOrder/LITTLE_ENDIAN
-                 :endian/big ByteOrder/BIG_ENDIAN
-                 :endian/network ByteOrder/BIG_ENDIAN
-                 :endian/native (ByteOrder/nativeOrder)})
+                  :endian/big ByteOrder/BIG_ENDIAN
+                  :endian/network ByteOrder/BIG_ENDIAN
+                  :endian/native (ByteOrder/nativeOrder)})
 
 (defn force-byte-order [order codec]
   "Creates a wrapper for the passed codec that forces byte buffers to be in specific byte order.
   The order can either be a java.nio.ByteOrder object, or it could be a keyword from the byte-order
   map.  Supported keywords are :endian/little :endian/big :endian/network :endian/native"
   (let [byteorder (if (keyword? order)
-                     (order byte-orders)
-                     order)]
+                    (order byte-orders)
+                    order)]
     (reify Codec
       (alignment*[_ encoding] (alignment codec encoding))
       (sizeof* [_ encoding data] (sizeof codec encoding data))
       (to-buffer!* [_ encoding data buffer] 
-                   (let [prev-order (.order buffer)]
-                     (do
-                       (.order buffer byteorder)
-                       (to-buffer! codec encoding data buffer)
-                       (.order buffer prev-order))))
+        (let [prev-order (.order buffer)]
+          (do
+            (.order buffer byteorder)
+            (to-buffer! codec encoding data buffer)
+            (.order buffer prev-order))))
       (from-buffer!* [_ encoding buffer]
-                   (let [prev-order (.order buffer)
-                         value (from-buffer! codec encoding (.order buffer byteorder))]
-                     (do
-                       (.order buffer prev-order)
-                       value))))))
+        (let [prev-order (.order buffer)
+              value (from-buffer! codec encoding (.order buffer byteorder))]
+          (do
+            (.order buffer prev-order)
+            value))))))
 
 

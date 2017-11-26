@@ -247,10 +247,10 @@
 (codec/def ::baz ::codec/int64)
 (codec/def ::bane ::codec/int16)
 
-(codec/def ::tfoo (codec/tuple [::bar ::baz ::bane]))
+(codec/def ::tfoo [::bar ::baz ::bane])
 (codec/def ::mfoo (codec/keys [::bar ::baz ::bane]))
 
-(deftest test-tuples
+(deftest test-seq
   (testing "alignment"
     (testing "1 byte" (is (= 1 (alignment ::tfoo {::codec/word-size 1}))))
     (testing "2 byte" (is (= 2 (alignment ::tfoo {::codec/word-size 2}))))
