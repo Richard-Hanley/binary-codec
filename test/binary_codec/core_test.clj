@@ -242,11 +242,6 @@
           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
     ))
 
-; Define some codecs for the tuple and map test
-; (codec/def ::bar ::codec/int8)
-; (codec/def ::baz ::codec/int64)
-; (codec/def ::bane ::codec/int16)
-
 (codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
 (codec/def ::mfoo {::bar ::codec/int8 ::baz ::codec/int64 ::bane ::codec/int16})
 
@@ -273,3 +268,39 @@
           buffer (.flip 
                    (to-buffer! ::mfoo codec/base-encoding data (ByteBuffer/allocate 40)))]
       (is (= data (from-buffer! ::mfoo codec/base-encoding buffer)))))
+
+(codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
+(codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})
+(codec/def ::foob {::length ::codec/uint8 ::type ::codec/uint8 ::b ::codec/uint16})
+(codec/def ::fooc {::length ::codec/uint8 ::type ::codec/uint8 ::c ::codec/uint32})
+(codec/def ::food {::length ::codec/uint8 ::type ::codec/uint8 ::d ::codec/int64})
+
+(def foo-type {1 ::fooa 2 ::foob 3 ::fooc 4 ::food})
+(codec/def ::ufoo (codec/tagged-union ::base-foo (fn [foo] (get foo-type (::type foo)))))
+
+(deftest test-union
+  (testing "sizeof without data" (is (= nil (codec/sizeof ::ufoo))))
+  (testing "fooa"
+    (let [fooa {::length (byte 3) ::type (byte 1) ::a (byte 17)}
+          buff (to-buffer! ::ufoo fooa (ByteBuffer/allocate 20))
+          data (from-buffer! ::ufoo (.flip buff))]
+      (testing "sizeof" (is (= 3 (codec/sizeof ::ufoo codec/base-encoding fooa))))
+      (testing "encoding" (is (= fooa data)))))
+  (testing "foob"
+    (let [foob {::length (byte 4) ::type (byte 2) ::b (short 257)}
+          buff (to-buffer! ::ufoo foob (ByteBuffer/allocate 20))
+          data (from-buffer! ::ufoo (.flip buff))]
+      (testing "sizeof" (is (= 4 (codec/sizeof ::ufoo codec/base-encoding foob))))
+      (testing "encoding" (is (= foob data)))))
+  (testing "fooc"
+    (let [fooc {::length (byte 6) ::type (byte 3) ::c (unchecked-int 0xDEADBEEF)}
+          buff (to-buffer! ::ufoo fooc (ByteBuffer/allocate 20))
+          data (from-buffer! ::ufoo (.flip buff))]
+      (testing "sizeof" (is (= 6 (codec/sizeof ::ufoo codec/base-encoding fooc))))
+      (testing "encoding" (is (= fooc data)))))
+  (testing "food"
+    (let [food {::length (byte 10) ::type (byte 4) ::d (long 0xDEADBEEF)}
+          buff (to-buffer! ::ufoo food (ByteBuffer/allocate 20))
+          data (from-buffer! ::ufoo (.flip buff))]
+      (testing "sizeof" (is (= 10 (codec/sizeof ::ufoo codec/base-encoding food))))
+      (testing "encoding" (is (= food data))))))

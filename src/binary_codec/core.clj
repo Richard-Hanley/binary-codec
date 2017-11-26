@@ -216,6 +216,22 @@
     (let [values (from-buffer! (vals this) encoding buffer)]
       (into {} (map vector (keys this) values)))))
 
+(defn tagged-union [base-codec dispatch]
+  (reify Codec
+    (alignment* [_ encoding] (alignment base-codec encoding))
+    (sizeof* [_ encoding data] 
+      (if (nil? data)
+        nil
+        (sizeof (dispatch data) encoding data)))
+    (to-buffer!* [_ encoding data buffer] (to-buffer! (dispatch data) encoding data buffer))
+    (from-buffer!* [_ encoding buffer]
+      (let [base-data (from-buffer! base-codec encoding buffer)
+            full-codec (dispatch base-data)
+            base-read-length (sizeof base-codec encoding base-data)
+            buffer-position (.position buffer)
+            unwound-buffer (.position buffer (- buffer-position base-read-length))]
+        (from-buffer! full-codec encoding buffer)))))
+
 (defn align [alignment-value codec]
   "Creates a wrapper around the passed codec that forces the word-size to be the given value"
   (reify Codec
