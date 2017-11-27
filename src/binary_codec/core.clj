@@ -86,12 +86,21 @@
 
 
 (defn def 
-  "Macro used to define a global codec, a la spec.  It takes a fully qualified keyword
+  "Function used to define a global codec, a la spec.  It takes a fully qualified keyword
   as and a codec, and adds that codec to the registry"
   [k codec] 
   (do
     (swap! registry-ref assoc k codec)
     k))
+
+(defmacro defcodecspec
+  "Will def a given spec and codec with the keyword.  Specs and codecs can be passed as a vector
+  or as seperate arguments"
+  ([k [spec codec]] (binary-codec.core/defcodecspec ~k ~spec ~codec))
+  ([k spec codec] `(do 
+                     (s/def ~k ~spec)
+                     (binary-codec.core/def ~k ~codec)
+                     ~k)))
 
 (s/def ::word-size #{0 1 2 4 8})
 
@@ -132,15 +141,18 @@
        (from-buffer!* codec encoding buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
-(binary-codec.core/def ::int8 
+(binary-codec.core/defcodecspec
+  ::int8 
+  (make-signed-integral-conformer byte)
   (reify Codec
     (alignment* [_ _] 0)
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer))))
-(s/def ::int8 (make-signed-integral-conformer byte))
 
-(binary-codec.core/def ::int16
+(binary-codec.core/defcodecspec
+  ::int16
+  (make-signed-integral-conformer short)
   (reify Codec
     (alignment* [_ encoding] 
       (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
@@ -148,9 +160,10 @@
     (sizeof* [_ _ _] Short/BYTES)
     (to-buffer!* [_ _ data buffer] (.putShort buffer data))
     (from-buffer!* [_ _ buffer] (.getShort buffer))))
-(s/def ::int16 (make-signed-integral-conformer short))
 
-(binary-codec.core/def ::int32
+(binary-codec.core/defcodecspec 
+  ::int32
+  (make-signed-integral-conformer int)
   (reify Codec
     (alignment* [_ encoding]
       (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
@@ -158,9 +171,10 @@
     (sizeof* [_ _ _] Integer/BYTES)
     (to-buffer!* [_ _ data buffer] (.putInt buffer data))
     (from-buffer!* [_ _ buffer] (.getInt buffer))))
-(s/def ::int32 (make-signed-integral-conformer int))
 
-(binary-codec.core/def ::int64
+(binary-codec.core/defcodecspec 
+  ::int64
+  (make-signed-integral-conformer long)
   (reify Codec
     (alignment* [_ encoding]
       (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
@@ -168,16 +182,10 @@
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
     (from-buffer!* [_ _ buffer] (.getLong buffer))))
-(s/def ::int64 (make-signed-integral-conformer long))
 
-(binary-codec.core/def ::uint8 ::int8)
-(s/def ::uint8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
-
-(binary-codec.core/def ::uint16 ::int16)
-(s/def ::uint16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
-
-(binary-codec.core/def ::uint32 ::int32)
-(s/def ::uint32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
+(binary-codec.core/defcodecspec ::uint8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte) ::int8)
+(binary-codec.core/defcodecspec ::uint16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short) ::int16)
+(binary-codec.core/defcodecspec ::uint32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int) ::int32)
 
 (defn lazy-pad
   "Returns a lazy sequence which pads sequence with pad-value."
