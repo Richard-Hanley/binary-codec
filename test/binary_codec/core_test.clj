@@ -3,6 +3,7 @@
                      ByteOrder))
   (:require [clojure.spec.alpha :as s]
             [clojure.test :refer :all]
+            [binary-codec.encoding :as encoding :refer :all]
             [binary-codec.core :as codec :refer :all]))
 
 (deftest test-integral-conformers
@@ -114,25 +115,25 @@
     (is (= 0 (codec/alignment ::codec/int32)))
     (is (= 0 (codec/alignment ::codec/int64))))
   (testing "Alignment specified (1-byte)"
-    (is (= 0 (codec/alignment ::codec/int8 {::codec/word-size 1})))
-    (is (= 1 (codec/alignment ::codec/int16 {::codec/word-size 1})))
-    (is (= 1 (codec/alignment ::codec/int32 {::codec/word-size 1})))
-    (is (= 1 (codec/alignment ::codec/int64 {::codec/word-size 1}))))
+    (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 1})))
+    (is (= 1 (codec/alignment ::codec/int16 {::encoding/word-size 1})))
+    (is (= 1 (codec/alignment ::codec/int32 {::encoding/word-size 1})))
+    (is (= 1 (codec/alignment ::codec/int64 {::encoding/word-size 1}))))
   (testing "Alignment specified (2-byte)"
-    (is (= 0 (codec/alignment ::codec/int8 {::codec/word-size 2})))
-    (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 2})))
-    (is (= 2 (codec/alignment ::codec/int32 {::codec/word-size 2})))
-    (is (= 2 (codec/alignment ::codec/int64 {::codec/word-size 2}))))
+    (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 2})))
+    (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 2})))
+    (is (= 2 (codec/alignment ::codec/int32 {::encoding/word-size 2})))
+    (is (= 2 (codec/alignment ::codec/int64 {::encoding/word-size 2}))))
   (testing "Alignment specified (4-byte)"
-    (is (= 0 (codec/alignment ::codec/int8 {::codec/word-size 4})))
-    (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 4})))
-    (is (= 4 (codec/alignment ::codec/int32 {::codec/word-size 4})))
-    (is (= 4 (codec/alignment ::codec/int64 {::codec/word-size 4}))))
+    (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 4})))
+    (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 4})))
+    (is (= 4 (codec/alignment ::codec/int32 {::encoding/word-size 4})))
+    (is (= 4 (codec/alignment ::codec/int64 {::encoding/word-size 4}))))
   (testing "Alignment specified (8-byte)"
-    (is (= 0 (codec/alignment ::codec/int8 {::codec/word-size 8})))
-    (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 8})))
-    (is (= 4 (codec/alignment ::codec/int32 {::codec/word-size 8})))
-    (is (= 8 (codec/alignment ::codec/int64 {::codec/word-size 8})))))
+    (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 8})))
+    (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 8})))
+    (is (= 4 (codec/alignment ::codec/int32 {::encoding/word-size 8})))
+    (is (= 8 (codec/alignment ::codec/int64 {::encoding/word-size 8})))))
 
 (deftest test-numerical-put
   (testing "Test Byte"
@@ -183,7 +184,7 @@
 
 
 (deftest test-aligned
-  (let [encoding {::codec/word-size 8}
+  (let [encoding {::encoding/word-size 8}
         fill-buffer-with-offset (fn [offset codec value] 
                                   (let [buffer (ByteBuffer/allocate 40)]
                                     (dotimes [n offset] (.put buffer (byte 0)))
@@ -247,27 +248,27 @@
 
 (deftest test-seq
   (testing "alignment"
-    (testing "1 byte" (is (= 1 (alignment ::tfoo {::codec/word-size 1}))))
-    (testing "2 byte" (is (= 2 (alignment ::tfoo {::codec/word-size 2}))))
-    (testing "4 byte" (is (= 4 (alignment ::tfoo {::codec/word-size 4}))))
-    (testing "8 byte" (is (= 8 (alignment ::tfoo {::codec/word-size 8})))))
+    (testing "1 byte" (is (= 1 (alignment ::tfoo {::encoding/word-size 1}))))
+    (testing "2 byte" (is (= 2 (alignment ::tfoo {::encoding/word-size 2}))))
+    (testing "4 byte" (is (= 4 (alignment ::tfoo {::encoding/word-size 4}))))
+    (testing "8 byte" (is (= 8 (alignment ::tfoo {::encoding/word-size 8})))))
   (testing "sizeof"
     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-    (testing "1 byte alignment" (is (= 11 (sizeof ::tfoo {::codec/word-size 1}))))
-    (testing "2 byte alignment" (is (= 12 (sizeof ::tfoo {::codec/word-size 2}))))
-    (testing "4 byte alignment" (is (= 14 (sizeof ::tfoo {::codec/word-size 4}))))
-    (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::codec/word-size 8})))))
+    (testing "1 byte alignment" (is (= 11 (sizeof ::tfoo {::encoding/word-size 1}))))
+    (testing "2 byte alignment" (is (= 12 (sizeof ::tfoo {::encoding/word-size 2}))))
+    (testing "4 byte alignment" (is (= 14 (sizeof ::tfoo {::encoding/word-size 4}))))
+    (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::encoding/word-size 8})))))
   (testing "buffer writing and reading"
     (let [data [(byte 25) (long 0x31337DEADBEEF) (short 754)]
           buffer (.flip 
-                   (to-buffer! ::tfoo codec/base-encoding data (ByteBuffer/allocate 40)))]
-      (is (= data (from-buffer! ::tfoo codec/base-encoding buffer))))))
+                   (to-buffer! ::tfoo encoding/base-encoding data (ByteBuffer/allocate 40)))]
+      (is (= data (from-buffer! ::tfoo encoding/base-encoding buffer))))))
 
 (deftest test-keys
     (let [data {::bane (short 754) ::baz (long 0x31337DEADBEEF) ::bar (byte 15)}
           buffer (.flip 
-                   (to-buffer! ::mfoo codec/base-encoding data (ByteBuffer/allocate 40)))]
-      (is (= data (from-buffer! ::mfoo codec/base-encoding buffer)))))
+                   (to-buffer! ::mfoo encoding/base-encoding data (ByteBuffer/allocate 40)))]
+      (is (= data (from-buffer! ::mfoo encoding/base-encoding buffer)))))
 
 (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})
@@ -284,23 +285,23 @@
     (let [fooa {::length (byte 3) ::type (byte 1) ::a (byte 17)}
           buff (to-buffer! ::ufoo fooa (ByteBuffer/allocate 20))
           data (from-buffer! ::ufoo (.flip buff))]
-      (testing "sizeof" (is (= 3 (codec/sizeof ::ufoo codec/base-encoding fooa))))
+      (testing "sizeof" (is (= 3 (codec/sizeof ::ufoo encoding/base-encoding fooa))))
       (testing "encoding" (is (= fooa data)))))
   (testing "foob"
     (let [foob {::length (byte 4) ::type (byte 2) ::b (short 257)}
           buff (to-buffer! ::ufoo foob (ByteBuffer/allocate 20))
           data (from-buffer! ::ufoo (.flip buff))]
-      (testing "sizeof" (is (= 4 (codec/sizeof ::ufoo codec/base-encoding foob))))
+      (testing "sizeof" (is (= 4 (codec/sizeof ::ufoo encoding/base-encoding foob))))
       (testing "encoding" (is (= foob data)))))
   (testing "fooc"
     (let [fooc {::length (byte 6) ::type (byte 3) ::c (unchecked-int 0xDEADBEEF)}
           buff (to-buffer! ::ufoo fooc (ByteBuffer/allocate 20))
           data (from-buffer! ::ufoo (.flip buff))]
-      (testing "sizeof" (is (= 6 (codec/sizeof ::ufoo codec/base-encoding fooc))))
+      (testing "sizeof" (is (= 6 (codec/sizeof ::ufoo encoding/base-encoding fooc))))
       (testing "encoding" (is (= fooc data)))))
   (testing "food"
     (let [food {::length (byte 10) ::type (byte 4) ::d (long 0xDEADBEEF)}
           buff (to-buffer! ::ufoo food (ByteBuffer/allocate 20))
           data (from-buffer! ::ufoo (.flip buff))]
-      (testing "sizeof" (is (= 10 (codec/sizeof ::ufoo codec/base-encoding food))))
+      (testing "sizeof" (is (= 10 (codec/sizeof ::ufoo encoding/base-encoding food))))
       (testing "encoding" (is (= food data))))))

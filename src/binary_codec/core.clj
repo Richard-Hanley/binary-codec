@@ -1,11 +1,13 @@
 (ns binary-codec.core
   (:import (java.nio ByteBuffer
                      ByteOrder))
-  (:require [clojure.spec.alpha :as s]))
-
-(alias 'c 'clojure.core)
+  (:require [binary-codec.encoding :as encoding]
+            [clojure.spec.alpha :as s]))
 
 (defprotocol Codec
+  (encode*        [this encoding] "Encodes a codec with the given parameters, and returns a new codec")
+  (encoded?*       [this]          "Returns a boolean of whether or not the codec is fully encoded, or if it
+                                  needs more encoding parameters")
   (alignment*     [this encoding] "The alignment of this codec with a given encoding")
   (sizeof*        [this encoding data] "Given a piece of data, and an encoding, 
                                        what is the number of bytes that it will fill")
@@ -102,21 +104,25 @@
                      (binary-codec.core/def ~k ~codec)
                      ~k)))
 
-(s/def ::word-size #{0 1 2 4 8})
+(defn encode [codec-or-k encoding]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (encode codec encoding)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
 
-(s/def ::base-encoding (s/keys :req [::word-size]))
-
-(def base-encoding {::word-size 0})
+(defn encoded? [codec-or-k]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (encoded? codec)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
 
 (defn alignment
-  ([codec-or-k] (alignment codec-or-k base-encoding))
+  ([codec-or-k] (alignment codec-or-k encoding/base-encoding))
   ([codec-or-k encoding] 
    (if-let [codec (reg-resolve codec-or-k)]
      (alignment* codec encoding)
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn sizeof 
-  ([codec-or-k] (sizeof codec-or-k base-encoding nil))
+  ([codec-or-k] (sizeof codec-or-k encoding/base-encoding nil))
   ([codec-or-k encoding] (sizeof codec-or-k encoding nil))
   ([codec-or-k encoding data]
    (if-let [codec (reg-resolve codec-or-k)]
@@ -124,7 +130,7 @@
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn to-buffer!
-  ([codec-or-k data buffer] (to-buffer! codec-or-k base-encoding data buffer))
+  ([codec-or-k data buffer] (to-buffer! codec-or-k encoding/base-encoding data buffer))
   ([codec-or-k encoding data buffer]
    (if-let [codec (reg-resolve codec-or-k)]
      (do
@@ -133,7 +139,7 @@
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn from-buffer!
-  ([codec-or-k buffer] (from-buffer! codec-or-k base-encoding buffer))
+  ([codec-or-k buffer] (from-buffer! codec-or-k encoding/base-encoding buffer))
   ([codec-or-k encoding buffer]
    (if-let [codec (reg-resolve codec-or-k)]
      (do
@@ -141,10 +147,13 @@
        (from-buffer!* codec encoding buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
+
 (binary-codec.core/defcodecspec
   ::int8 
   (make-signed-integral-conformer byte)
   (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] true)
     (alignment* [_ _] 0)
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
@@ -154,8 +163,10 @@
   ::int16
   (make-signed-integral-conformer short)
   (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] true)
     (alignment* [_ encoding] 
-      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
         (min word-size Short/BYTES)))
     (sizeof* [_ _ _] Short/BYTES)
     (to-buffer!* [_ _ data buffer] (.putShort buffer data))
@@ -165,8 +176,10 @@
   ::int32
   (make-signed-integral-conformer int)
   (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] true)
     (alignment* [_ encoding]
-      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
         (min word-size Integer/BYTES)))
     (sizeof* [_ _ _] Integer/BYTES)
     (to-buffer!* [_ _ data buffer] (.putInt buffer data))
@@ -176,8 +189,10 @@
   ::int64
   (make-signed-integral-conformer long)
   (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] true)
     (alignment* [_ encoding]
-      (let [{word-size ::word-size} (s/conform ::base-encoding encoding)]
+      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
         (min word-size Long/BYTES)))
     (sizeof* [_ _ _] Long/BYTES)
     (to-buffer!* [_ _ data buffer] (.putLong buffer data))
@@ -239,49 +254,4 @@
             buffer-position (.position buffer)
             unwound-buffer (.position buffer (- buffer-position base-read-length))]
         (from-buffer! full-codec encoding buffer)))))
-
-(defn align [alignment-value codec]
-  "Creates a wrapper around the passed codec that forces the word-size to be the given value"
-  (reify Codec
-    (alignment*[_ encoding] (alignment codec (assoc encoding ::word-size alignment-value)))
-    (sizeof* [_ encoding data] (sizeof* codec (assoc encoding ::word-size alignment-value) data))
-    (to-buffer!* [_ encoding data buffer] (to-buffer!* codec (assoc encoding ::word-size alignment-value) data buffer))
-    (from-buffer!* [_ encoding buffer] (from-buffer!* codec (assoc encoding ::word-size alignment-value) buffer))))
-
-(defn unaligned [codec]
-  "Creates a wrapper around the passed codec that forces the word-size to be 0"
-  (reify Codec
-    (alignment*[_ encoding] (alignment codec (assoc encoding ::word-size 0)))
-    (sizeof* [_ encoding data] (sizeof codec (assoc encoding ::word-size 0) data))
-    (to-buffer!* [_ encoding data buffer] (to-buffer! codec (assoc encoding ::word-size 0) data buffer))
-    (from-buffer!* [_ encoding buffer] (from-buffer! codec (assoc encoding ::word-size 0) buffer))))
-
-(def byte-orders {:endian/little ByteOrder/LITTLE_ENDIAN
-                  :endian/big ByteOrder/BIG_ENDIAN
-                  :endian/network ByteOrder/BIG_ENDIAN
-                  :endian/native (ByteOrder/nativeOrder)})
-
-(defn force-byte-order [order codec]
-  "Creates a wrapper for the passed codec that forces byte buffers to be in specific byte order.
-  The order can either be a java.nio.ByteOrder object, or it could be a keyword from the byte-order
-  map.  Supported keywords are :endian/little :endian/big :endian/network :endian/native"
-  (let [byteorder (if (keyword? order)
-                    (order byte-orders)
-                    order)]
-    (reify Codec
-      (alignment*[_ encoding] (alignment codec encoding))
-      (sizeof* [_ encoding data] (sizeof codec encoding data))
-      (to-buffer!* [_ encoding data buffer] 
-        (let [prev-order (.order buffer)]
-          (do
-            (.order buffer byteorder)
-            (to-buffer! codec encoding data buffer)
-            (.order buffer prev-order))))
-      (from-buffer!* [_ encoding buffer]
-        (let [prev-order (.order buffer)
-              value (from-buffer! codec encoding (.order buffer byteorder))]
-          (do
-            (.order buffer prev-order)
-            value))))))
-
 
