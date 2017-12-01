@@ -143,7 +143,10 @@
       (is (= 16 (codec/alignment (codec/align 16 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
     (testing "alignment is not even multiple of base alignment"
       (is (thrown? IllegalArgumentException (codec/alignment (codec/align 15 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
-    ))
+    (testing "alignment is maintained after re-encoding"
+      (is (= 16 (codec/alignment (codec/encode (codec/align 16 ::codec/int64) {::encoding/word-size 8}))))))
+  (testing "unaligned"
+    (is (= 0 (codec/alignment (codec/unaligned (codec/encode ::codec/int64 {::encoding/word-size 8})))))))
 
 
 (deftest test-numerical-put
@@ -193,65 +196,68 @@
         (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 buffer)))))))
 
 
-; (deftest test-aligned
-;   (let [encoding {::encoding/word-size 8}
-;         fill-buffer-with-offset (fn [offset codec value] 
-;                                   (let [buffer (ByteBuffer/allocate 40)]
-;                                     (dotimes [n offset] (.put buffer (byte 0)))
-;                                     (to-buffer! codec encoding value buffer)
-;                                     (.flip buffer)))]
-;     (testing "Alignment off by 1"
-;       (testing "int16"
-;         (let [buffer (fill-buffer-with-offset 1 ::codec/int16 (short 0x7F4))]
-;           (is (= 0 (from-buffer! ::codec/int16 encoding buffer)))
-;           (is (= 0x7F4 (from-buffer! ::codec/int16 encoding buffer)))))
-;       (testing "int32"
-;         (let [buffer (fill-buffer-with-offset 1 ::codec/int32 (int 0x7890BEEF))]
-;           (is (= 0 (from-buffer! ::codec/int32 encoding buffer)))
-;           (is (= 0x7890BEEF (from-buffer! ::codec/int32 encoding buffer)))))
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 1 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 2"
-;       (testing "int32"
-;         (let [buffer (fill-buffer-with-offset 2 ::codec/int32 (int 0x7890BEEF))]
-;           (is (= 0 (from-buffer! ::codec/int32 encoding buffer)))
-;           (is (= 0x7890BEEF (from-buffer! ::codec/int32 encoding buffer)))))
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 2 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 3"
-;       (testing "int32"
-;         (let [buffer (fill-buffer-with-offset 3 ::codec/int32 (int 0x7890BEEF))]
-;           (is (= 0 (from-buffer! ::codec/int32 encoding buffer)))
-;           (is (= 0x7890BEEF (from-buffer! ::codec/int32 encoding buffer)))))
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 3 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 4"
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 4 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 5"
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 5 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 6"
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 6 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     (testing "Alignment off by 7"
-;       (testing "int64"
-;         (let [buffer (fill-buffer-with-offset 7 ::codec/int64 (long 0x31337DEADBEEF))]
-;           (is (= 0 (from-buffer! ::codec/int64 encoding buffer)))
-;           (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 encoding buffer))))))
-;     ))
+(deftest test-aligned
+  (let [aligned-int8 (codec/encode ::codec/int8 {::encoding/word-size 8})
+        aligned-int16 (codec/encode ::codec/int16 {::encoding/word-size 8})
+        aligned-int32 (codec/encode ::codec/int32 {::encoding/word-size 8})
+        aligned-int64 (codec/encode ::codec/int64 {::encoding/word-size 8})
+        fill-buffer-with-offset (fn [offset codec value] 
+                                  (let [buffer (ByteBuffer/allocate 40)]
+                                    (dotimes [n offset] (.put buffer (byte 0)))
+                                    (to-buffer! codec value buffer)
+                                    (.flip buffer)))]
+    (testing "Alignment off by 1"
+      (testing "int16"
+        (let [buffer (fill-buffer-with-offset 1 aligned-int16 (short 0x7F4))]
+          (is (= 0 (from-buffer! aligned-int16 buffer)))
+          (is (= 0x7F4 (from-buffer! aligned-int16 buffer)))))
+      (testing "int32"
+        (let [buffer (fill-buffer-with-offset 1 aligned-int32 (int 0x7890BEEF))]
+          (is (= 0 (from-buffer! aligned-int32 buffer)))
+          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 1 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 2"
+      (testing "int32"
+        (let [buffer (fill-buffer-with-offset 2 aligned-int32 (int 0x7890BEEF))]
+          (is (= 0 (from-buffer! aligned-int32 buffer)))
+          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 2 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 3"
+      (testing "int32"
+        (let [buffer (fill-buffer-with-offset 3 aligned-int32 (int 0x7890BEEF))]
+          (is (= 0 (from-buffer! aligned-int32 buffer)))
+          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 3 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 4"
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 4 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 5"
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 5 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 6"
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 6 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    (testing "Alignment off by 7"
+      (testing "int64"
+        (let [buffer (fill-buffer-with-offset 7 aligned-int64 (long 0x31337DEADBEEF))]
+          (is (= 0 (from-buffer! aligned-int64 buffer)))
+          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
+    ))
 
 (codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
 (codec/def ::mfoo {::bar ::codec/int8 ::baz ::codec/int64 ::bane ::codec/int16})

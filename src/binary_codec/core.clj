@@ -166,8 +166,8 @@
         (max (alignment codec) primitive-alignment))
       (sizeof* [_] (sizeof codec))
       (sizeof* [_ data] (sizeof codec data))
-      (to-buffer!* [_ data buffer] )
-      (from-buffer!* [_ buffer]))))
+      (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
+      (from-buffer!* [_ buffer] (from-buffer! codec buffer)))))
 
 (binary-codec.core/defcodecspec
   ::int8 
@@ -301,10 +301,22 @@
         (if (= 0 (mod new-alignment old-alignment))
           new-alignment
           (throw (IllegalArgumentException.
-                   (format "Cannot align to new alignment (%d) because it is not an even multiple of the old alignment (%d)" new-alignment old-alignment))))))
+                   (format "cannot align to new alignment (%d) because it is not an even multiple of the old alignment (%d)" new-alignment old-alignment))))))
                                                
 
     (sizeof* [_] (sizeof codec))
     (sizeof* [_ data] (sizeof codec data))
     (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
     (from-buffer!* [_ buffer] (from-buffer! codec buffer))))
+
+(defn unaligned [codec]
+  (reify Codec
+    (encode* [_ encoding] (unaligned (encode codec encoding)))
+    (encoded?* [this] (encoded? codec))
+    (alignment* [_] 0)
+    (sizeof* [_] (sizeof codec))
+    (sizeof* [_ data] (sizeof codec data))
+    (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
+    (from-buffer!* [_ buffer] (from-buffer! codec buffer))))
+
+
