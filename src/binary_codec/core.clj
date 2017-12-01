@@ -5,16 +5,20 @@
             [clojure.spec.alpha :as s]))
 
 (defprotocol Codec
-  (encode*        [this encoding] "Encodes a codec with the given parameters, and returns a new codec")
-  (encoded?*       [this]          "Returns a boolean of whether or not the codec is fully encoded, or if it
-                                  needs more encoding parameters")
-  (alignment*     [this encoding] "The alignment of this codec with a given encoding")
-  (sizeof*        [this encoding data] "Given a piece of data, and an encoding, 
-                                       what is the number of bytes that it will fill")
-  (to-buffer!*    [this encoding data buffer] "Serialize data to a passed in buffer, based on the
-                                              associated encoding")
-  (from-buffer!*  [this encoding buffer] "Deserialize from a binary buffer to data, based on the
-                                         associated encoding"))
+  (encode*        [this encoding]     "Encodes a codec with the given parameters, and returns a new codec")
+
+  (encoded?*      [this]              "Returns a boolean of whether or not the codec is fully encoded, or if it
+                                      needs more encoding parameters")
+
+  (alignment*     [this]              "The alignment of this codec")
+
+  (sizeof*        [this] [this data]  "What is the number of bytes that this codec will fill.
+                                      If the size is variable, then the data will need to be passed
+                                      in, otherwise the result will be nil")
+
+  (to-buffer!*    [this data buffer]  "Serialize data to a passed in buffer")
+
+  (from-buffer!*  [this buffer]       "Deserialize from a binary buffer to data"))
 
 (defn alignment-padding [align-to position]
   (if-not (zero? align-to)
@@ -115,88 +119,84 @@
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
 
 (defn alignment
-  ([codec-or-k] (alignment codec-or-k encoding/base-encoding))
-  ([codec-or-k encoding] 
+  ([codec-or-k] 
    (if-let [codec (reg-resolve codec-or-k)]
-     (alignment* codec encoding)
+     (alignment* codec)
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn sizeof 
-  ([codec-or-k] (sizeof codec-or-k encoding/base-encoding nil))
-  ([codec-or-k encoding] (sizeof codec-or-k encoding nil))
-  ([codec-or-k encoding data]
+  ([codec-or-k] 
    (if-let [codec (reg-resolve codec-or-k)]
-     (sizeof* codec encoding data)
+     (sizeof* codec)
+     (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
+  ([codec-or-k data]
+   (if-let [codec (reg-resolve codec-or-k)]
+     (sizeof* codec data)
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn to-buffer!
-  ([codec-or-k data buffer] (to-buffer! codec-or-k encoding/base-encoding data buffer))
-  ([codec-or-k encoding data buffer]
+  ([codec-or-k data buffer] 
    (if-let [codec (reg-resolve codec-or-k)]
      (do
-       (align-buffer-write (alignment* codec encoding) buffer)
-       (to-buffer!* codec encoding data buffer))
+       (align-buffer-write (alignment* codec) buffer)
+       (to-buffer!* codec data buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
 (defn from-buffer!
-  ([codec-or-k buffer] (from-buffer! codec-or-k encoding/base-encoding buffer))
-  ([codec-or-k encoding buffer]
+  ([codec-or-k buffer] 
    (if-let [codec (reg-resolve codec-or-k)]
      (do
-       (align-buffer-read (alignment* codec encoding) buffer)
-       (from-buffer!* codec encoding buffer))
+       (align-buffer-read (alignment* codec) buffer)
+       (from-buffer!* codec buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
-
 
 (binary-codec.core/defcodecspec
   ::int8 
   (make-signed-integral-conformer byte)
   (reify Codec
-    (encode* [_ encoding])
+    (encode* [this encoding] this)
     (encoded?* [_] true)
-    (alignment* [_ _] 0)
-    (sizeof* [_ _ _] Byte/BYTES)
-    (to-buffer!* [_ _ data buffer] (.put buffer data))
-    (from-buffer!* [_ _ buffer] (.get buffer))))
+    (alignment* [_] 0)
+    (sizeof* [_] Byte/BYTES)
+    (sizeof* [_ _] Byte/BYTES)
+    (to-buffer!* [_ data buffer] (.put buffer data))
+    (from-buffer!* [_ buffer] (.get buffer))))
 
 (binary-codec.core/defcodecspec
   ::int16
   (make-signed-integral-conformer short)
   (reify Codec
-    (encode* [_ encoding])
+    (encode* [this encoding] this)
     (encoded?* [_] true)
-    (alignment* [_ encoding] 
-      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
-        (min word-size Short/BYTES)))
-    (sizeof* [_ _ _] Short/BYTES)
-    (to-buffer!* [_ _ data buffer] (.putShort buffer data))
-    (from-buffer!* [_ _ buffer] (.getShort buffer))))
+    (alignment* [_] 0)
+    (sizeof* [_] Short/BYTES)
+    (sizeof* [_ _] Short/BYTES)
+    (to-buffer!* [_ data buffer] (.putShort buffer data))
+    (from-buffer!* [_ buffer] (.getShort buffer))))
 
 (binary-codec.core/defcodecspec 
   ::int32
   (make-signed-integral-conformer int)
   (reify Codec
-    (encode* [_ encoding])
+    (encode* [this encoding] this)
     (encoded?* [_] true)
-    (alignment* [_ encoding]
-      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
-        (min word-size Integer/BYTES)))
-    (sizeof* [_ _ _] Integer/BYTES)
-    (to-buffer!* [_ _ data buffer] (.putInt buffer data))
-    (from-buffer!* [_ _ buffer] (.getInt buffer))))
+    (alignment* [_] 0)
+    (sizeof* [_] Integer/BYTES)
+    (sizeof* [_ _] Integer/BYTES)
+    (to-buffer!* [_ data buffer] (.putInt buffer data))
+    (from-buffer!* [_ buffer] (.getInt buffer))))
 
 (binary-codec.core/defcodecspec 
   ::int64
   (make-signed-integral-conformer long)
   (reify Codec
-    (encode* [_ encoding])
+    (encode* [this encoding] this)
     (encoded?* [_] true)
-    (alignment* [_ encoding]
-      (let [{word-size ::encoding/word-size} (s/conform ::encoding/base-encoding encoding)]
-        (min word-size Long/BYTES)))
-    (sizeof* [_ _ _] Long/BYTES)
-    (to-buffer!* [_ _ data buffer] (.putLong buffer data))
-    (from-buffer!* [_ _ buffer] (.getLong buffer))))
+    (alignment* [_] 0)
+    (sizeof* [_] Long/BYTES)
+    (sizeof* [_ _] Long/BYTES)
+    (to-buffer!* [_ data buffer] (.putLong buffer data))
+    (from-buffer!* [_ buffer] (.getLong buffer))))
 
 (binary-codec.core/defcodecspec ::uint8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte) ::int8)
 (binary-codec.core/defcodecspec ::uint16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short) ::int16)
@@ -209,49 +209,57 @@
     (repeat pad-value)
     (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
-(extend-protocol Codec
-
-  clojure.lang.Sequential
-  (alignment* [this encoding] (apply max (map #(alignment % encoding) this)))
-  (sizeof* [this encoding data]
+(extend-type clojure.lang.Sequential
+  Codec
+  (encode* [this encoding] (map #(encode % encoding) this))
+  (encoded?* [this] (every? encoded? this))
+  (alignment* [this ] (apply max (map alignment this)))
+  (sizeof* [this data]
     (reduce 
       (fn [accum [codec elem]]
-        (if-let [size (sizeof codec encoding elem)]
-          (+ accum size (alignment-padding (alignment codec encoding) accum))
+        (if-let [size (sizeof codec elem)]
+          (+ accum size (alignment-padding (alignment codec) accum))
           (reduced nil)))
       0
       (map vector this (lazy-pad data nil))))
-  (to-buffer!* [this encoding data buffer] 
+  (to-buffer!* [this data buffer] 
     (doseq [[codec elem] (map vector this data)]
-      (to-buffer! codec encoding elem buffer))
+      (to-buffer! codec elem buffer))
     buffer)
-  (from-buffer!* [this encoding buffer]
-    (into [] (doall (map #(from-buffer! % encoding buffer) this))))
+  (from-buffer!* [this buffer]
+    (into [] (doall (map #(from-buffer! % buffer) this)))))
 
-  clojure.lang.PersistentArrayMap
-  (alignment* [this encoding] 
-    (alignment (vals this) encoding))
-  (sizeof* [this encoding data] 
-    (sizeof (vals this) encoding (vals data)))
-  (to-buffer!* [this encoding data buffer] 
-    (to-buffer! (vals this) encoding (map #(get data %1) (keys this)) buffer))
-  (from-buffer!* [this encoding buffer] 
-    (let [values (from-buffer! (vals this) encoding buffer)]
+(extend-type clojure.lang.PersistentArrayMap
+  Codec
+  (encode* [this encoding] (map #(encode % encoding) (vals this)))
+  (encoded?* [this] (every? encoded? (vals this)))
+  (alignment* [this] 
+    (alignment (vals this)))
+  (sizeof* [this] 
+    (sizeof (vals this)))
+  (sizeof* [this data] 
+    (sizeof (vals this) (vals data)))
+  (to-buffer!* [this data buffer] 
+    (to-buffer! (vals this) (map #(get data %1) (keys this)) buffer))
+  (from-buffer!* [this buffer] 
+    (let [values (from-buffer! (vals this) buffer)]
       (into {} (map vector (keys this) values)))))
 
 (defn tagged-union [base-codec dispatch]
   (reify Codec
-    (alignment* [_ encoding] (alignment base-codec encoding))
-    (sizeof* [_ encoding data] 
+    (encode* [this encoding] this)
+    (encoded?* [this] true)
+    (alignment* [_] (alignment base-codec))
+    (sizeof* [_] nil)
+    (sizeof* [_ data] 
       (if (nil? data)
         nil
-        (sizeof (dispatch data) encoding data)))
-    (to-buffer!* [_ encoding data buffer] (to-buffer! (dispatch data) encoding data buffer))
-    (from-buffer!* [_ encoding buffer]
-      (let [base-data (from-buffer! base-codec encoding buffer)
+        (sizeof (dispatch data) data)))
+    (to-buffer!* [_ data buffer] (to-buffer! (dispatch data) data buffer))
+    (from-buffer!* [_ buffer]
+      (let [base-data (from-buffer! base-codec buffer)
             full-codec (dispatch base-data)
-            base-read-length (sizeof base-codec encoding base-data)
+            base-read-length (sizeof base-codec base-data)
             buffer-position (.position buffer)
             unwound-buffer (.position buffer (- buffer-position base-read-length))]
-        (from-buffer! full-codec encoding buffer)))))
-
+        (from-buffer! full-codec buffer)))))
