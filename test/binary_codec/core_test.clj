@@ -265,19 +265,16 @@
 (deftest test-seq
   (testing "alignment"
     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-    ; (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-    ; (testing "1 byte" (is (= 1 (alignment ::tfoo {::encoding/word-size 1}))))
-    ; (testing "2 byte" (is (= 2 (alignment ::tfoo {::encoding/word-size 2}))))
-    ; (testing "4 byte" (is (= 4 (alignment ::tfoo {::encoding/word-size 4}))))
-    ; (testing "8 byte" (is (= 8 (alignment ::tfoo {::encoding/word-size 8})))))
-    )
+    (testing "1 byte" (is (= 1 (alignment (codec/encode ::tfoo {::encoding/word-size 1})))))
+    (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::encoding/word-size 2})))))
+    (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::encoding/word-size 4})))))
+    (testing "8 byte" (is (= 8 (alignment (codec/encode ::tfoo {::encoding/word-size 8}))))))
   (testing "sizeof"
     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-    ; (testing "1 byte alignment" (is (= 11 (sizeof ::tfoo {::encoding/word-size 1}))))
-    ; (testing "2 byte alignment" (is (= 12 (sizeof ::tfoo {::encoding/word-size 2}))))
-    ; (testing "4 byte alignment" (is (= 14 (sizeof ::tfoo {::encoding/word-size 4}))))
-    ; (testing "8 byte alignment" (is (= 18 (sizeof ::tfoo {::encoding/word-size 8})))))
-    )
+    (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::tfoo {::encoding/word-size 1})))))
+    (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::tfoo {::encoding/word-size 2})))))
+    (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::tfoo {::encoding/word-size 4})))))
+    (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::tfoo {::encoding/word-size 8}))))))
   (testing "buffer writing and reading"
     (let [data [(byte 25) (long 0x31337DEADBEEF) (short 754)]
           buffer (.flip 
@@ -285,6 +282,19 @@
       (is (= data (from-buffer! ::tfoo buffer))))))
 
 (deftest test-keys
+  (testing "alignment"
+    (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
+    (testing "1 byte" (is (= 1 (alignment (codec/encode ::mfoo {::encoding/word-size 1})))))
+    (testing "2 byte" (is (= 2 (alignment (codec/encode ::mfoo {::encoding/word-size 2})))))
+    (testing "4 byte" (is (= 4 (alignment (codec/encode ::mfoo {::encoding/word-size 4})))))
+    (testing "8 byte" (is (= 8 (alignment (codec/encode ::mfoo {::encoding/word-size 8}))))))
+  (testing "sizeof"
+    (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
+    (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::mfoo {::encoding/word-size 1})))))
+    (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::mfoo {::encoding/word-size 2})))))
+    (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::mfoo {::encoding/word-size 4})))))
+    (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::mfoo {::encoding/word-size 8}))))))
+ 
     (let [data {::bane (short 754) ::baz (long 0x31337DEADBEEF) ::bar (byte 15)}
           buffer (.flip 
                    (to-buffer! ::mfoo data (ByteBuffer/allocate 40)))]
