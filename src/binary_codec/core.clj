@@ -110,12 +110,12 @@
 
 (defn encode [codec-or-k encoding]
    (if-let [codec (reg-resolve codec-or-k)]
-     (encode codec encoding)
+     (encode* codec encoding)
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
 
 (defn encoded? [codec-or-k]
    (if-let [codec (reg-resolve codec-or-k)]
-     (encoded? codec)
+     (encoded?* codec)
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k)))))
 
 (defn alignment
@@ -150,11 +150,30 @@
        (from-buffer!* codec buffer))
      (throw (Exception. (str "Unable to resolve codec - " codec-or-k))))))
 
+(defn encode-primitive [codec primitive-encoding]
+  (let [conformed-encoding (if (s/valid? ::encoding/base-encoding primitive-encoding)
+                             (s/conform ::encoding/base-encoding primitive-encoding)
+                             (throw (Exception. (str "Unable to encode primitive" 
+                                                   (s/explain-str ::encoding/base-encoding primitive-encoding)))))
+        primitive-alignment (if-let [word-size (::encoding/word-size conformed-encoding)]
+                              (min word-size (sizeof codec))
+                              0)]
+    (reify Codec
+      (encode* [_ encoding] (encode codec (merge primitive-encoding encoding)))
+      (encoded?* [_] (encoded? codec))
+      (alignment* [_] 
+        ;Use the primitive alignment, unless this codec was already aligned to a larger value
+        (max (alignment codec) primitive-alignment))
+      (sizeof* [_] (sizeof codec))
+      (sizeof* [_ data] (sizeof codec data))
+      (to-buffer!* [_ data buffer] )
+      (from-buffer!* [_ buffer]))))
+
 (binary-codec.core/defcodecspec
   ::int8 
   (make-signed-integral-conformer byte)
   (reify Codec
-    (encode* [this encoding] this)
+    (encode* [this encoding] (encode-primitive this encoding))
     (encoded?* [_] true)
     (alignment* [_] 0)
     (sizeof* [_] Byte/BYTES)
@@ -166,7 +185,7 @@
   ::int16
   (make-signed-integral-conformer short)
   (reify Codec
-    (encode* [this encoding] this)
+    (encode* [this encoding] (encode-primitive this encoding))
     (encoded?* [_] true)
     (alignment* [_] 0)
     (sizeof* [_] Short/BYTES)
@@ -178,7 +197,7 @@
   ::int32
   (make-signed-integral-conformer int)
   (reify Codec
-    (encode* [this encoding] this)
+    (encode* [this encoding] (encode-primitive this encoding))
     (encoded?* [_] true)
     (alignment* [_] 0)
     (sizeof* [_] Integer/BYTES)
@@ -190,7 +209,7 @@
   ::int64
   (make-signed-integral-conformer long)
   (reify Codec
-    (encode* [this encoding] this)
+    (encode* [this encoding] (encode-primitive this encoding))
     (encoded?* [_] true)
     (alignment* [_] 0)
     (sizeof* [_] Long/BYTES)
@@ -240,7 +259,7 @@
 
 (extend-type clojure.lang.PersistentArrayMap
   Codec
-  (encode* [this encoding] (map #(encode % encoding) (vals this)))
+  (encode* [this encoding] (zipmap (keys this) (map #(encode % encoding) (vals this))))
   (encoded?* [this] (every? encoded? (vals this)))
   (alignment* [this] 
     (alignment (vals this)))
@@ -271,3 +290,21 @@
             buffer-position (.position buffer)
             unwound-buffer (.position buffer (- buffer-position base-read-length))]
         (from-buffer! full-codec buffer)))))
+
+(defn align [align-to codec]
+  (reify Codec
+    (encode* [_ encoding] (align align-to (encode codec encoding)))
+    (encoded?* [this] (encoded? codec))
+    (alignment* [_] 
+      (let [old-alignment (alignment codec)
+            new-alignment (max align-to old-alignment)]
+        (if (= 0 (mod new-alignment old-alignment))
+          new-alignment
+          (throw (IllegalArgumentException.
+                   (format "Cannot align to new alignment (%d) because it is not an even multiple of the old alignment (%d)" new-alignment old-alignment))))))
+                                               
+
+    (sizeof* [_] (sizeof codec))
+    (sizeof* [_ data] (sizeof codec data))
+    (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
+    (from-buffer!* [_ buffer] (from-buffer! codec buffer))))

@@ -108,32 +108,43 @@
   (is (= 4 (codec/sizeof ::codec/int32)))
   (is (= 8 (codec/sizeof ::codec/int64))))
 
-; (deftest test-numerical-alignment
-;   (testing "Base Encoding (no alignment)"
-;     (is (= 0 (codec/alignment ::codec/int8)))
-;     (is (= 0 (codec/alignment ::codec/int16)))
-;     (is (= 0 (codec/alignment ::codec/int32)))
-;     (is (= 0 (codec/alignment ::codec/int64))))
-;   (testing "Alignment specified (1-byte)"
-;     (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 1})))
-;     (is (= 1 (codec/alignment ::codec/int16 {::encoding/word-size 1})))
-;     (is (= 1 (codec/alignment ::codec/int32 {::encoding/word-size 1})))
-;     (is (= 1 (codec/alignment ::codec/int64 {::encoding/word-size 1}))))
-;   (testing "Alignment specified (2-byte)"
-;     (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 2})))
-;     (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 2})))
-;     (is (= 2 (codec/alignment ::codec/int32 {::encoding/word-size 2})))
-;     (is (= 2 (codec/alignment ::codec/int64 {::encoding/word-size 2}))))
-;   (testing "Alignment specified (4-byte)"
-;     (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 4})))
-;     (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 4})))
-;     (is (= 4 (codec/alignment ::codec/int32 {::encoding/word-size 4})))
-;     (is (= 4 (codec/alignment ::codec/int64 {::encoding/word-size 4}))))
-;   (testing "Alignment specified (8-byte)"
-;     (is (= 0 (codec/alignment ::codec/int8 {::encoding/word-size 8})))
-;     (is (= 2 (codec/alignment ::codec/int16 {::encoding/word-size 8})))
-;     (is (= 4 (codec/alignment ::codec/int32 {::encoding/word-size 8})))
-;     (is (= 8 (codec/alignment ::codec/int64 {::encoding/word-size 8})))))
+(deftest test-numerical-alignment
+  (testing "Base Encoding (no alignment)"
+    (is (= 0 (codec/alignment ::codec/int8)))
+    (is (= 0 (codec/alignment ::codec/int16)))
+    (is (= 0 (codec/alignment ::codec/int32)))
+    (is (= 0 (codec/alignment ::codec/int64))))
+  (testing "Alignment specified (1-byte)"
+    (is (= 1 (codec/alignment (codec/encode ::codec/int8 {::encoding/word-size 1}))))
+    (is (= 1 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 1}))))
+    (is (= 1 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 1}))))
+    (is (= 1 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 1})))))
+  (testing "alignment (codec/encode specified (2-byte)"
+    (is (= 1 (codec/alignment (codec/encode ::codec/int8 {::encoding/word-size 2}))))
+    (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 2}))))
+    (is (= 2 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 2}))))
+    (is (= 2 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 2})))))
+  (testing "alignment (codec/encode specified (4-byte)"
+    (is (= 1 (codec/alignment (codec/encode ::codec/int8 {::encoding/word-size 4}))))
+    (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 4}))))
+    (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 4}))))
+    (is (= 4 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 4})))))
+  (testing "alignment (codec/encode specified (8-byte)"
+    (is (= 1 (codec/alignment (codec/encode ::codec/int8 {::encoding/word-size 8}))))
+    (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 8}))))
+    (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 8}))))
+    (is (= 8 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 8})))))
+  (testing "explicit alignment with encoding"
+    (testing "force alignment to 8"
+      (is (= 8 (codec/alignment (codec/align 8 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+    (testing "force alignment to less than primitive size"
+      (is (= 8 (codec/alignment (codec/align 4 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+    (testing "force alignment to larger than primitive size"
+      (is (= 16 (codec/alignment (codec/align 16 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+    (testing "alignment is not even multiple of base alignment"
+      (is (thrown? IllegalArgumentException (codec/alignment (codec/align 15 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+    ))
+
 
 (deftest test-numerical-put
   (testing "Test Byte"
