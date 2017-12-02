@@ -144,17 +144,31 @@
         (let [buffer (fill-buffer-with-offset-value 2 aligned-int16 test-value)]
           (is (= 0 (from-buffer! aligned-int16 buffer)))
           (is (= test-value (from-buffer! aligned-int16 buffer)))))
+      
       (testing "read/write to little endian buffer without encoding byte order"
         (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
                                                                           test-value
                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-      (testing "read/write little endian buffer with big encoding")
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ::encoding/endian/big})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
       (testing "read/write to big endian buffer without encoding"
         (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
-                                                                          test-value
-                                                                          (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-      (testing "read/write to big endian buffer with little encoding")
-     
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ::encoding/endian/little})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
 ))))
 
 (deftest test-integer
@@ -221,13 +235,26 @@
         (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
                                                                           test-value
                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-      (testing "read/write little endian buffer with big encoding")
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ::encoding/endian/big})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
       (testing "read/write to big endian buffer without encoding"
         (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
-                                                                          test-value
-                                                                          (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-      (testing "read/write to big endian buffer with little encoding")
-     
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ::encoding/endian/little})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
 )))
 
 (deftest test-long
@@ -293,151 +320,28 @@
         (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
                                                                           test-value
                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-      (testing "read/write little endian buffer with big encoding")
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ::encoding/endian/big})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
       (testing "read/write to big endian buffer without encoding"
         (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
-                                                                          test-value
-                                                                          (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-      (testing "read/write to big endian buffer with little encoding")
-     
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ::encoding/endian/little})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
 )))
 
-
-
-  (deftest test-numerical-alignment
-    (testing "Base Encoding (no alignment)"
-      (is (= 0 (codec/alignment ::codec/int32)))
-      (is (= 0 (codec/alignment ::codec/int64))))
-    (testing "Alignment specified (1-byte)"
-      (is (= 1 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 1}))))
-      (is (= 1 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 1})))))
-    (testing "alignment (codec/encode specified (2-byte)"
-      (is (= 2 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 2}))))
-      (is (= 2 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 2})))))
-    (testing "alignment (codec/encode specified (4-byte)"
-      (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 4}))))
-      (is (= 4 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 4})))))
-    (testing "alignment (codec/encode specified (8-byte)"
-      (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 8}))))
-      (is (= 8 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
-
-; (deftest test-primitive-byte-order
-;   (let [buffer (ByteBuffer/allocate 8)]
-;     (testing "reading from buffer"
-;       (let [prep-buffer (fn []
-;                           (.rewind buffer)
-;                           (doseq n (take 8 (range))
-;                             (.put buffer (byte n)))
-;                           (.rewind buffer))]
-;         (
-
-
-
-
-; (deftest test-numerical-put
-;   (testing "Test Byte"
-;     (testing "Little Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int8 
-;                                       (byte 15) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/LITTLE_ENDIAN)))]
-;         (is (= 15 (from-buffer! ::codec/int8 buffer)))))
-;     (testing "Big Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int8 
-;                                       (byte 15) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/BIG_ENDIAN)))]
-;         (is (= 15 (from-buffer! ::codec/int8 buffer))))))
-;   (testing "Test Short"
-;     (testing "Little Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int16 
-;                                       (short 0x7F4) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/LITTLE_ENDIAN)))]
-;         (is (= 0x7F4 (from-buffer! ::codec/int16 buffer)))))
-;     (testing "Big Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int16 
-;                                       (short 0x7F4) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/BIG_ENDIAN)))]
-;         (is (= 0x7F4 (from-buffer! ::codec/int16 buffer))))))
-;   (testing "Test Integer"
-;     (testing "Little Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int32 
-;                                       (int 0x7890BEEF) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/LITTLE_ENDIAN)))]
-;         (is (= 0x7890BEEF (from-buffer! ::codec/int32 buffer)))))
-;     (testing "Big Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int32 
-;                                       (int 0x7890BEEF) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/BIG_ENDIAN)))]
-;         (is (= 0x7890BEEF (from-buffer! ::codec/int32 buffer))))))
-;   (testing "Test Long"
-;     (testing "Little Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int64 
-;                                       (long 0x31337DEADBEEF) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/LITTLE_ENDIAN)))]
-;         (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 buffer)))))
-;     (testing "Big Endian"
-;       (let [buffer (.flip (to-buffer! ::codec/int64 
-;                                       (long 0x31337DEADBEEF) 
-;                                       (.order (ByteBuffer/allocate 10) ByteOrder/BIG_ENDIAN)))]
-;         (is (= 0x31337DEADBEEF (from-buffer! ::codec/int64 buffer)))))))
-
-
-(deftest test-aligned
-  (let [aligned-int8 (codec/encode ::codec/int8 {::encoding/word-size 8})
-        aligned-int16 (codec/encode ::codec/int16 {::encoding/word-size 8})
-        aligned-int32 (codec/encode ::codec/int32 {::encoding/word-size 8})
-        aligned-int64 (codec/encode ::codec/int64 {::encoding/word-size 8})]
-    (testing "Alignment off by 1"
-      (testing "int16"
-        (let [buffer (fill-buffer-with-offset-value 1 aligned-int16 (short 0x7F4))]
-          (is (= 0 (from-buffer! aligned-int16 buffer)))
-          (is (= 0x7F4 (from-buffer! aligned-int16 buffer)))))
-      (testing "int32"
-        (let [buffer (fill-buffer-with-offset-value 1 aligned-int32 (int 0x7890BEEF))]
-          (is (= 0 (from-buffer! aligned-int32 buffer)))
-          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 1 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 2"
-      (testing "int32"
-        (let [buffer (fill-buffer-with-offset-value 2 aligned-int32 (int 0x7890BEEF))]
-          (is (= 0 (from-buffer! aligned-int32 buffer)))
-          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 2 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 3"
-      (testing "int32"
-        (let [buffer (fill-buffer-with-offset-value 3 aligned-int32 (int 0x7890BEEF))]
-          (is (= 0 (from-buffer! aligned-int32 buffer)))
-          (is (= 0x7890BEEF (from-buffer! aligned-int32 buffer)))))
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 3 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 4"
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 4 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 5"
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 5 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 6"
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 6 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    (testing "Alignment off by 7"
-      (testing "int64"
-        (let [buffer (fill-buffer-with-offset-value 7 aligned-int64 (long 0x31337DEADBEEF))]
-          (is (= 0 (from-buffer! aligned-int64 buffer)))
-          (is (= 0x31337DEADBEEF (from-buffer! aligned-int64 buffer))))))
-    ))
 
 (deftest test-forced-alignmnet
   (testing "force alignment to 8"

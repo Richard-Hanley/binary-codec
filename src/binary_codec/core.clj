@@ -166,8 +166,18 @@
         (max (alignment codec) primitive-alignment))
       (sizeof* [_] (sizeof codec))
       (sizeof* [_ data] (sizeof codec data))
-      (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
-      (from-buffer!* [_ buffer] (from-buffer! codec buffer)))))
+      (to-buffer!* [_ data buffer] 
+        (if-let [byte-order (::encoding/byte-order conformed-encoding)]
+          (encoding/buffer-op-with-endian byte-order
+                                          (partial to-buffer! codec data)
+                                          buffer)
+          (to-buffer! codec data buffer)))
+      (from-buffer!* [_ buffer] 
+        (if-let [byte-order (::encoding/byte-order conformed-encoding)]
+          (encoding/buffer-op-with-endian byte-order
+                                          (partial from-buffer! codec)
+                                          buffer)
+          (from-buffer! codec buffer))))))
 
 (binary-codec.core/defcodecspec
   ::int8 
