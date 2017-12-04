@@ -359,7 +359,6 @@
 
 
 (codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
-(codec/def ::mfoo {::bar ::codec/int8 ::baz ::codec/int64 ::bane ::codec/int16})
 
 (deftest test-seq
   (testing "alignment"
@@ -380,7 +379,12 @@
                    (to-buffer! ::tfoo data (ByteBuffer/allocate 40)))]
       (is (= data (from-buffer! ::tfoo buffer))))))
 
-(deftest test-keys
+(codec/defstruct ::mfoo 
+  (codec/field ::bar ::codec/int8 (s/int-in 12 20))
+  (codec/field ::baz ::codec/int64 odd?)
+  (codec/field ::bane ::codec/int16 #{1 2 4 8 754}))
+
+(deftest test-struct
   (testing "alignment"
     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
     (testing "1 byte" (is (= 1 (alignment (codec/encode ::mfoo {::encoding/word-size 1})))))
@@ -393,7 +397,18 @@
     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::mfoo {::encoding/word-size 2})))))
     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::mfoo {::encoding/word-size 4})))))
     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::mfoo {::encoding/word-size 8}))))))
-
+  (testing "conformance"
+    (testing "valid values"
+      (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 ::bane 2}))
+      (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 ::bane 754})))
+    (testing "invalid ::bar"
+      (is (not (s/valid? ::mfoo {::bar 11 ::baz 1245789 ::bane 2})))
+      (is (not (s/valid? ::mfoo {::bar 20 ::baz 1245789 ::bane 2}))))
+    (testing "invalid baz"
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 ::bane 2}))))
+    (testing "invalid bane"
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 ::bane 3})))
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 ::bane 9})))))
   (let [data {::bane (short 754) ::baz (long 0x31337DEADBEEF) ::bar (byte 15)}
         buffer (.flip 
                  (to-buffer! ::mfoo data (ByteBuffer/allocate 40)))]
