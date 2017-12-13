@@ -100,33 +100,47 @@
             (with-name spec k)))))
     k))
 
+(defn defcodec [k c]
+  (swap! registry-ref assoc k c))
 
-(defn def 
+(defmacro def 
   "Function used to define a global codec, a la spec.  It takes a fully qualified keyword
-  as and a codec, and adds that codec to the registry"
-  [k codec] 
-  (do
-    (swap! registry-ref assoc k codec)
-    k))
+  as and a codec, and adds that codec to the registry
 
-(defmacro specify-base-codec
-  "Will def a given spec and codec with the keyword."
-  ([k codec spec] `(do 
-                     (binary-codec.core/def ~k ~codec)
-                     (s/def ~k ~spec)
-                     ~k)))
+  If the codec also has a spec associated with it, then that spec will also be registered with
+  the same keyword
+  
+  If a spec is also given as an argument, then it will be combined with the codec spec"
+  ([k c] 
+   (let [spec `(codec-spec ~c)]
+     `(do
+        (defcodec ~k ~c)
+        (if (some? ~spec)
+          (s/def ~k ~spec))
+        ~k)))
+  ([k c s]
+   (let [cs `(codec-spec ~c)
+         spec `(if (some? ~cs)
+                (s/and ~s ~cs)
+                ~s)]
+     `(do
+        (defcodec ~k ~c)
+        (if (some? ~spec)
+          (s/def ~k ~spec))
+        ~k))))
+
 
 (defmacro field 
   ([keyword codec-key]
    `(do
       (s/def ~keyword ~codec-key)
-      (binary-codec.core/def ~keyword ~codec-key)
+      (defcodec ~keyword ~codec-key)
       ~keyword))
   ([keyword codec-key additional-spec]
    `(do
       (s/def ~keyword (s/and ~additional-spec
                              ~codec-key))
-      (binary-codec.core/def ~keyword ~codec-key)
+      (defcodec ~keyword ~codec-key)
       ~keyword)))
 
 (defn seq-to-field-map [field-keys]
@@ -139,7 +153,7 @@
     `(do
        ; (println ~field-keys)
        (s/def ~k (s/keys :req [~@field-keys]))
-       (binary-codec.core/def ~k ~field-map))))
+       (defcodec ~k ~field-map))))
 
 (defn encode [codec-or-k encoding]
    (if-let [codec (reg-resolve codec-or-k)]
@@ -212,7 +226,7 @@
                                           buffer)
           (from-buffer! codec buffer))))))
 
-(binary-codec.core/specify-base-codec
+(binary-codec.core/def
   ::int8 
   (reify Codec
     (encode* [this encoding] (encode-primitive this encoding))
@@ -224,7 +238,7 @@
     (from-buffer!* [_ buffer] (.get buffer)))
   (make-signed-integral-conformer byte))
 
-(binary-codec.core/specify-base-codec
+(binary-codec.core/def
   ::int16
   (reify Codec
     (encode* [this encoding] (encode-primitive this encoding))
@@ -236,7 +250,7 @@
     (from-buffer!* [_ buffer] (.getShort buffer)))
   (make-signed-integral-conformer short))
 
-(binary-codec.core/specify-base-codec 
+(binary-codec.core/def 
   ::int32
   (reify Codec
     (encode* [this encoding] (encode-primitive this encoding))
@@ -248,7 +262,7 @@
     (from-buffer!* [_ buffer] (.getInt buffer)))
   (make-signed-integral-conformer int))
 
-(binary-codec.core/specify-base-codec 
+(binary-codec.core/def 
   ::int64
   (reify Codec
     (encode* [this encoding] (encode-primitive this encoding))
@@ -260,9 +274,9 @@
     (from-buffer!* [_ buffer] (.getLong buffer)))
   (make-signed-integral-conformer long))
 
-(binary-codec.core/specify-base-codec ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
-(binary-codec.core/specify-base-codec ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
-(binary-codec.core/specify-base-codec ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
+(binary-codec.core/def ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
+(binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
+(binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
 (defn lazy-pad
   "Returns a lazy sequence which pads sequence with pad-value."
