@@ -65,6 +65,16 @@
   [c]
   (and (satisfies? Codec c) c))
 
+(defn codec-spec 
+  "Given a codec codec-spec will return an associated spec, or nil.
+  If the given codec is a keyword, then this will return the same keyword
+  if and only if the keyword is registered with spec
+
+  Otherwise codec-spec will look at the :spec field in the objects metadata"
+  [c]
+  (if (and (keyword? c) (s/get-spec c))
+    c
+    (:spec (meta c))))
 
 (defonce ^:private registry-ref (atom {}))
 
@@ -307,7 +317,11 @@
 
 (defn tagged-union [base-codec dispatch]
   (reify Codec
-    (encode* [this encoding] this)
+    (encode* [this encoding] 
+      ;Return codec with this's current spec as metadata
+      (with-meta 
+        this
+        (assoc (meta encoding) :spec (codec-spec this))))
     (encoded?* [this] true)
     (alignment* [_] (alignment base-codec))
     (sizeof* [_] nil)
@@ -326,7 +340,11 @@
 
 (defn align [align-to codec]
   (reify Codec
-    (encode* [_ encoding] (align align-to (encode codec encoding)))
+    (encode* [this encoding] 
+      ;Return codec with this's current spec as metadata
+      (with-meta 
+        (align align-to (encode codec encoding))
+        (assoc (meta encoding) :spec (codec-spec this))))
     (encoded?* [this] (encoded? codec))
     (alignment* [_] 
       (let [old-alignment (alignment codec)
@@ -344,7 +362,11 @@
 
 (defn unaligned [codec]
   (reify Codec
-    (encode* [_ encoding] (unaligned (encode codec encoding)))
+    (encode* [this encoding] 
+      ;Return codec with this's current spec as metadata
+      (with-meta 
+        (unaligned (encode codec encoding)) 
+        (assoc (meta encoding) :spec (codec-spec this))))
     (encoded?* [this] (encoded? codec))
     (alignment* [_] 0)
     (sizeof* [_] (sizeof codec))
