@@ -380,9 +380,9 @@
       (is (= data (from-buffer! ::tfoo buffer))))))
 
 (codec/defstruct ::mfoo 
-  (codec/field ::bar ::codec/int8 (s/int-in 12 20))
-  (codec/field ::baz ::codec/int64 odd?)
-  (codec/field ::bane ::codec/int16 #{1 2 4 8 754}))
+  (codec/def ::bar ::codec/int8 (s/int-in 12 20))
+  (codec/def ::baz ::codec/int64 odd?)
+  (codec/def ::bane ::codec/int16 #{1 2 4 8 754}))
 
 (deftest test-struct
   (testing "alignment"

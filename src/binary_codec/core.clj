@@ -129,29 +129,13 @@
           (s/def ~k ~spec))
         ~k))))
 
-
-(defmacro field 
-  ([keyword codec-key]
-   `(do
-      (s/def ~keyword ~codec-key)
-      (defcodec ~keyword ~codec-key)
-      ~keyword))
-  ([keyword codec-key additional-spec]
-   `(do
-      (s/def ~keyword (s/and ~additional-spec
-                             ~codec-key))
-      (defcodec ~keyword ~codec-key)
-      ~keyword)))
-
 (defn seq-to-field-map [field-keys]
   (into (array-map) (map vector field-keys field-keys)))
 
 (defmacro defstruct [k & fields]
   (let [field-keys (map eval fields)
         field-map (seq-to-field-map field-keys)]
-    ; (println field-keys)
     `(do
-       ; (println ~field-keys)
        (s/def ~k (s/keys :req [~@field-keys]))
        (defcodec ~k ~field-map))))
 
