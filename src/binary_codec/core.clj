@@ -426,36 +426,6 @@
         spec `(s/keys :req ~req :req-un ~req-un)]
     `~spec)) 
 
-
-(extend-type clojure.lang.Sequential
-  Codec
-  (encode* [this encoding] (map #(encode % encoding) this))
-  (encoded?* [this] (every? encoded? this))
-  (alignment* [this] (apply max (map alignment this)))
-  (sizeof* 
-    ([this]
-     (reduce 
-       (fn [accum codec]
-         (if-let [size (sizeof codec)]
-           (+ accum size (alignment-padding (alignment codec) accum))
-           (reduced nil)))
-       0
-       this))
-    ([this data]
-     (reduce 
-       (fn [accum [codec elem]]
-         (if-let [size (sizeof codec elem)]
-           (+ accum size (alignment-padding (alignment codec) accum))
-           (reduced nil)))
-       0
-       (map vector this (lazy-pad data nil)))))
-  (to-buffer!* [this data buffer] 
-    (doseq [[codec elem] (map vector this data)]
-      (to-buffer! codec elem buffer))
-    buffer)
-  (from-buffer!* [this buffer]
-    (into [] (doall (map #(from-buffer! % buffer) this)))))
-
 (extend-type clojure.lang.PersistentArrayMap
   Codec
   (encode* [this encoding] (zipmap (keys this) (map #(encode % encoding) (vals this))))
