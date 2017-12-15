@@ -357,15 +357,24 @@
   (testing "unaligned"
     (is (= 0 (codec/alignment (codec/unaligned (codec/encode ::codec/int64 {::encoding/word-size 8})))))))
 
-(codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
+; (codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
+(codec/def ::tfoo (codec/tuple ::codec/int8 ::codec/int64 ::codec/int16))
 
 (deftest test-seq
+  (testing "conformance"
+    (testing "valid data" (is (s/valid? ::tfoo [25 12324 754])))
+    (testing "data out of range" (is (not (s/valid? ::tfoo [278 12324 754]))))
+    (testing "not enough arguments" (is (not (s/valid? ::tfoo [25 12324]))))
+    (testing "too many arguments" (is (not (s/valid? ::tfoo [25 12324 754 12 9])))))
   (testing "alignment"
     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
     (testing "1 byte" (is (= 1 (alignment (codec/encode ::tfoo {::encoding/word-size 1})))))
     (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::encoding/word-size 2})))))
     (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::encoding/word-size 4})))))
     (testing "8 byte" (is (= 8 (alignment (codec/encode ::tfoo {::encoding/word-size 8}))))))
+  (testing "alignment using index-map"
+    (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::encoding/word-size 2}]]})))))
+    (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::encoding/word-size 4}]]}))))))
   (testing "sizeof"
     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::tfoo {::encoding/word-size 1})))))
@@ -373,7 +382,7 @@
     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::tfoo {::encoding/word-size 4})))))
     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::tfoo {::encoding/word-size 8}))))))
   (testing "buffer writing and reading"
-    (let [data [(byte 25) (long 0x31337DEADBEEF) (short 754)]
+    (let [data (s/conform ::tfoo [25 0x31337DEADBEEF 754])
           buffer (.flip 
                    (to-buffer! ::tfoo data (ByteBuffer/allocate 40)))]
       (is (= data (from-buffer! ::tfoo buffer))))))

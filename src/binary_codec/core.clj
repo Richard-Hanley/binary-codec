@@ -186,9 +186,13 @@
                                                    (s/explain-str ::encoding/base-encoding primitive-encoding)))))
         primitive-alignment (if-let [word-size (::encoding/word-size conformed-encoding)]
                               (min word-size (sizeof codec))
-                              0)]
-    (reify Codec
-      (encode* [_ encoding] (encode codec (merge primitive-encoding encoding)))
+                              0)
+        spec (codec-spec codec)]
+    (with-meta
+      (reify Codec
+      (encode* [_ encoding] 
+        (with-meta (encode codec (merge primitive-encoding encoding))
+                   {:spec spec}))
       (encoded?* [_] (encoded? codec))
       (alignment* [_] 
         ;Use the primitive alignment, unless this codec was already aligned to a larger value
@@ -206,7 +210,8 @@
           (encoding/buffer-op-with-endian byte-order
                                           (partial from-buffer! codec)
                                           buffer)
-          (from-buffer! codec buffer))))))
+          (from-buffer! codec buffer))))
+      {:spec spec})))
 
 (binary-codec.core/def
   ::int8 
@@ -308,19 +313,64 @@
              (make-variable-array-codec ~codec))]
     `(with-meta ~c {:spec ~coll-spec})))
 
-(defmacro tuple [& codecs]
+(defn tuple-impl [codecs specs]
+    (with-meta 
+       (reify Codec
+         (encode* [_ encoding]
+           (let [index-map (into {} (::index-map encoding))
+                 ;; Map over each codec and merge the encoding with the index map
+                 new-codecs (map (fn [c i]
+                                   (encode c (merge encoding (get index-map i))))
+                                 codecs
+                                 (range))]
+             (tuple-impl new-codecs specs)))
+         (encoded?* [_] (every? encoded? codecs))
+         (alignment* [_] (apply max (map alignment codecs)))
+         (sizeof* [_]
+           (reduce 
+             (fn [accum codec] nil
+               (if-let [size (sizeof codec)]
+                 (+ accum size (alignment-padding (alignment codec) accum))
+                 (reduced nil)))
+             0
+             codecs))
+         (sizeof* [_ data]
+           (reduce 
+             (fn [accum [codec elem]] nil
+               (if-let [size (sizeof codec elem)]
+                 (+ accum size (alignment-padding (alignment codec) accum))
+                 (reduced nil)))
+             0
+             (map vector codecs (lazy-pad data nil))))
+         (to-buffer!* [_ data buffer]
+           (doseq [[codec elem] (map vector codecs data)]
+             (to-buffer! codec elem buffer))
+           buffer)
+         (from-buffer!* [_ buffer]
+           (into [] (doall (map #(from-buffer! % buffer) codecs)))))
+       {:spec specs}))
+
+(defmacro tuple 
+  "Given a list of codecs this will generate a codec and spec that takes a tuple (e.g. vector)
+
+  When a tuple is encoded, the encoding map will be passed to every codec.  There is also a 
+  special key :binary-codec.core/index-map which is made up of [index map] tuples.
+
+  For example:
+  (def tup (codec/tuple ::codec/uint8 ::codec/uint16 ::codec/uint8))
+  (encode tup {::encoding/word-size 4 
+               ::encoding/byte-order ::encoding/endian/little
+               ::codec/index-map [[1 {::encoding/byte-order ::encoding/endian/big}]
+                                  [2 {::encoding/byte-order ::encoding/endian/native}]]})
+
+  Would encode the tuple with a word alignement of 4.  
+  Element 0 would be encoded in little
+  Element 1 would be in big endian
+  Element 2 would be in network endian"
+  [& codecs]
   (let [specs (mapv codec-spec codecs)
-        tuple-spec `(s/tuple ~@specs)
-        tuple-codec []]
-        ; tuple-codec (reify Codec
-        ;               (encode* [_ encoding])
-        ;               (encoded?* [_])
-        ;               (alignment* [_])
-        ;               (sizeof* [_] nil)
-        ;               (sizeof* [_ data])
-        ;               (to-buffer!* [_ data buffer] )
-        ;               (from-buffer!* [_ buffer]))]
-        `(with-meta ~tuple-codec {:spec ~tuple-spec})))
+        tuple-spec `(s/tuple ~@specs)]
+    `(tuple-impl [~@codecs] ~tuple-spec)))
 
 (defn unqualified-field 
   "Takes a fully namespaced keyword and splits it into a vector of namespace and name"
@@ -361,20 +411,20 @@
   all keywords are used as :req arguments to s/keys, while destructured keywords
   are used as :req-un arguments
   
-  When encoding a struct, there are some special keys that can be send
-    - :binary-codec.core/every will apply that values encoding to every codec in the struct
-    - having a key in the encoding that matches one of the codec keys will have that encoding value sent to that codec
+  When encoding a struct, there are some special keys that can be sent.  If there is key
+  in the encoding that matches one of the codecs key, then that value will be merged in
+  with the encoding
   
-  For example if there is a struct foo, that has codec ::bar ::baz ::bah, then
-  (encode foo {::codec/every '1 ::bar '2 ::baz '3}) would have 1 applied to every codec.
-  While ::bar and ::baz would get 2 and 3 respectively"
+  For example if there is a struct foo, that has codec ::bar ::baz ::bah, then in the following example
+  (encode foo {:some-encoding '1 :some-other-encoding '2 ::bar '3 ::baz '4}) 
+
+  ::bar would have 1, 2, and 3 applied
+  ::baz would have 1, 2 and 4 applied
+  ::bah would only have 1 and 2 applied"
   [& fields]
   (let [[req req-un codec-keys] (eval `(process-fields ~@fields))
         spec `(s/keys :req ~req :req-un ~req-un)]
     `~spec)) 
-
-
-
 
 
 (extend-type clojure.lang.Sequential
@@ -444,7 +494,11 @@
             unwound-buffer (.position buffer (- buffer-position base-read-length))]
         (from-buffer! full-codec buffer)))))
 
-(defn align [align-to codec]
+(defn align 
+  "Similar to the __align pragma in C, this can be used to add extra alignment padding
+  to a single codec.  Will not affect the internal structure of the codec.  To do that, you
+  should use the encode function"
+  [align-to codec]
   (reify Codec
     (encode* [this encoding] 
       ;Return codec with this's current spec as metadata
@@ -466,7 +520,10 @@
     (to-buffer!* [_ data buffer] (to-buffer! codec data buffer))
     (from-buffer!* [_ buffer] (from-buffer! codec buffer))))
 
-(defn unaligned [codec]
+(defn unaligned 
+  "Removes an alignement values fronm a specific codec.  Will not affect the internal structure
+  of the codec. To do that, you should use the encode function"
+  [codec]
   (reify Codec
     (encode* [this encoding] 
       ;Return codec with this's current spec as metadata
