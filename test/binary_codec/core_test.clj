@@ -357,7 +357,6 @@
   (testing "unaligned"
     (is (= 0 (codec/alignment (codec/unaligned (codec/encode ::codec/int64 {::encoding/word-size 8})))))))
 
-
 (codec/def ::tfoo [::codec/int8 ::codec/int64 ::codec/int16])
 
 (deftest test-seq
@@ -449,3 +448,22 @@
           data (from-buffer! ::ufoo (.flip buff))]
       (testing "sizeof" (is (= 10 (codec/sizeof ::ufoo food))))
       (testing "encoding" (is (= food data))))))
+
+
+(codec/def ::fixed-array (codec/array ::codec/uint16 :count 5))
+(codec/def ::var-array (codec/array ::codec/uint16))
+(codec/def ::bounded-array (codec/array ::codec/uint16 :min-count 3 :max-count 6))
+
+(deftest test-array
+  (testing "invalid values"
+    (testing "invalid values" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4 "Hello this string is not a number"]))))
+    (testing "variable array invalid values" (is (s/invalid? (s/conform ::var-array [1 2 3 4 "Hello this string is not a number"]))))
+    (testing "wrong length for fixed size" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4]))))
+    (testing "not enough for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2]))))
+    (testing "too many for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2 3 4 5 6 7]))))
+    )
+  (testing "valid values"
+    (testing "fixed array" (is (= [1 2 3 4 5] (s/conform ::fixed-array '(1 2 3 4 5)))))
+    (testing "var array " (is (= [1 2] (s/conform ::var-array [1 2]))))
+    (testing "bounded array" (is (= [1 2 3 4] (s/conform ::bounded-array [1 2 3 4]))))))
+

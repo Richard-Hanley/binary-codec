@@ -70,11 +70,13 @@
   If the given codec is a keyword, then this will return the same keyword
   if and only if the keyword is registered with spec
 
-  Otherwise codec-spec will look at the :spec field in the objects metadata"
+  Otherwise codec-spec will look at the :spec field in the objects metadata
+  
+  If there is no spec associated with the codec, then it will use identity"
   [c]
   (if (and (keyword? c) (s/get-spec c))
     c
-    (:spec (meta c))))
+    (or (:spec (meta c) identity))))
 
 (defonce ^:private registry-ref (atom {}))
 
@@ -115,18 +117,14 @@
    (let [spec `(codec-spec ~c)]
      `(do
         (defcodec ~k ~c)
-        (if (some? ~spec)
-          (s/def ~k ~spec))
+        (s/def ~k ~spec)
         ~k)))
   ([k c s]
    (let [cs `(codec-spec ~c)
-         spec `(if (some? ~cs)
-                (s/and ~s ~cs)
-                ~s)]
+         spec `(s/and ~s ~cs)]
      `(do
         (defcodec ~k ~c)
-        (if (some? ~spec)
-          (s/def ~k ~spec))
+        (s/def ~k ~spec)
         ~k))))
 
 (defn seq-to-field-map [field-keys]
@@ -268,6 +266,116 @@
   (if (empty? sequence)
     (repeat pad-value)
     (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
+
+;; TODO
+;; Manage alignment of complex codecs
+(defn make-fixed-array-codec [count-of c]
+  (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] (encoded? c))
+    (alignment* [_] (alignment c))
+    (sizeof* [_] (* count-of (sizeof c)))
+    (sizeof* [_ data])
+    (to-buffer!* [_ data buffer] )
+    (from-buffer!* [this buffer])))
+
+;;;;BIG TODO
+;;;;Figure this varaible array out
+(defn make-variable-array-codec [c]
+  (reify Codec
+    (encode* [_ encoding])
+    (encoded?* [_] (encoded? c))
+    (alignment* [_] (alignment c))
+    (sizeof* [_] nil)
+    (sizeof* [_ data])
+    (to-buffer!* [_ data buffer] )
+    (from-buffer!* [_ buffer])))
+
+
+
+(defmacro array [codec & {:keys [kind count min-count max-count distinct into]
+                          :or {kind nil count nil min-count nil max-count nil distinct nil into []}}]
+  (let [spec (codec-spec codec)
+        coll-spec `(s/coll-of ~spec
+                             :kind ~kind 
+                             :count ~count 
+                             :min-count ~min-count
+                             :max-count ~max-count
+                             :distinct ~distinct
+                             :into ~into)
+        c `(if (number? ~count)
+             (make-fixed-array-codec ~count ~codec)
+             (make-variable-array-codec ~codec))]
+    `(with-meta ~c {:spec ~coll-spec})))
+
+(defmacro tuple [& codecs]
+  (let [specs (mapv codec-spec codecs)
+        tuple-spec `(s/tuple ~@specs)
+        tuple-codec []]
+        ; tuple-codec (reify Codec
+        ;               (encode* [_ encoding])
+        ;               (encoded?* [_])
+        ;               (alignment* [_])
+        ;               (sizeof* [_] nil)
+        ;               (sizeof* [_ data])
+        ;               (to-buffer!* [_ data buffer] )
+        ;               (from-buffer!* [_ buffer]))]
+        `(with-meta ~tuple-codec {:spec ~tuple-spec})))
+
+(defn unqualified-field 
+  "Takes a fully namespaced keyword and splits it into a vector of namespace and name"
+  [k]
+  [(namespace k) (name k)])
+
+(s/def ::struct-fields (s/coll-of (s/or :qualified (s/and keyword
+                                                          namespace)
+                                        ; An unqualified keyword is a vector of namespace and
+                                        ; name.  This spec will also reform the value into 
+                                        ; a keyword
+                                        :unqualified (s/and
+                                                       (s/tuple string? string?)
+                                                       (s/conformer (partial apply keyword))))))
+
+(defn process-fields [& fields]
+  (let [f (if (s/valid? ::struct-fields fields)
+            (s/conform ::struct-fields fields)
+            (throw 
+              (IllegalArgumentException. 
+                (str "All fields must either be fully qualified keywords or vectors of namespaces and name "
+                     fields))))
+        qualified-keys (mapv second (filter #(= :qualified (first %)) f))
+        unqualified-keys (mapv second (filter #(= :unqualified (first %)) f))
+        codec-keys (mapv (fn [[q k]]
+                          (case q
+                            :qualified k
+                            :unqualified (keyword (name k))))
+                        f)]
+    [qualified-keys unqualified-keys codec-keys]))
+
+(defmacro struct 
+  "Creates a strucutre based on a list of fields passed in
+  A field can be either a fully qualified keyword registiered with spec,
+  or it can be a keyword that has been destructured using unqualified-field.
+
+  When using the codec fields are evaluated in order.  When using the struct
+  all keywords are used as :req arguments to s/keys, while destructured keywords
+  are used as :req-un arguments
+  
+  When encoding a struct, there are some special keys that can be send
+    - :binary-codec.core/every will apply that values encoding to every codec in the struct
+    - having a key in the encoding that matches one of the codec keys will have that encoding value sent to that codec
+  
+  For example if there is a struct foo, that has codec ::bar ::baz ::bah, then
+  (encode foo {::codec/every '1 ::bar '2 ::baz '3}) would have 1 applied to every codec.
+  While ::bar and ::baz would get 2 and 3 respectively"
+  [& fields]
+  (let [[req req-un codec-keys] (eval `(process-fields ~@fields))
+        spec `(s/keys :req ~req :req-un ~req-un)]
+    `~spec)) 
+
+
+
+
 
 (extend-type clojure.lang.Sequential
   Codec
