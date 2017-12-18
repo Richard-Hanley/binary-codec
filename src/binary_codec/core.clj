@@ -372,35 +372,47 @@
         tuple-spec `(s/tuple ~@specs)]
     `(tuple-impl [~@codecs] ~tuple-spec)))
 
-(defn unqualified-field 
-  "Takes a fully namespaced keyword and splits it into a vector of namespace and name"
+
+;; A fully qualified keyword is both a keyowrd and has a namespace
+(s/def ::fully-qualified-keyword (s/and keyword
+                                        namespace))
+
+;; A field is made up of either a tuple of [qualified-keyword raw-keyword]
+;; or it is simply a fully-qualfied keyword.
+;; This spec is used to detemine which type is being used
+(s/def ::field-type (s/or :destructured (s/tuple ::fully-qualified-keyword keyword)
+                          :raw ::fully-qualified-keyword))
+
+;; A field must be a tuple that has a fully qualified keyword for spec, and then a possibly unqualified field
+(s/def ::field (s/conformer
+                 (fn [k-or-tuple]
+                   (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
+                     (case k-type
+                       :destructured k-value
+                       :raw [k-value k-value])))))
+
+
+(defn unqualified 
+  "Produces a tuple of the passed keyword and an unqualified version of the keyword
+  This function can be used to force a struct to use the unqualified keyword for a field"
   [k]
-  [(namespace k) (name k)])
+  (if (s/valid? ::fully-qualified-keyword k)
+    [k (keyword (name k))]
+    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
+  
+(defn qualified 
+  "Produces a tuple of fully qualified keyword followed by the same fully qualified keyword
+  Usually you do not need this function, and can instead pass a single keyword directly to a struct"
+  [k]
+  (if (s/valid? ::fully-qualified-keyword k)
+    [k k]
+    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
 
-(s/def ::struct-fields (s/coll-of (s/or :qualified (s/and keyword
-                                                          namespace)
-                                        ; An unqualified keyword is a vector of namespace and
-                                        ; name.  This spec will also reform the value into 
-                                        ; a keyword
-                                        :unqualified (s/and
-                                                       (s/tuple string? string?)
-                                                       (s/conformer (partial apply keyword))))))
+(s/def ::struct-fields (s/coll-of ::field))
 
-(defn process-fields [& fields]
-  (let [f (if (s/valid? ::struct-fields fields)
-            (s/conform ::struct-fields fields)
-            (throw 
-              (IllegalArgumentException. 
-                (str "All fields must either be fully qualified keywords or vectors of namespaces and name "
-                     fields))))
-        qualified-keys (mapv second (filter #(= :qualified (first %)) f))
-        unqualified-keys (mapv second (filter #(= :unqualified (first %)) f))
-        codec-keys (mapv (fn [[q k]]
-                          (case q
-                            :qualified k
-                            :unqualified (keyword (name k))))
-                        f)]
-    [qualified-keys unqualified-keys codec-keys]))
+(defmacro form-keys [req req-un]
+  (let [spec `(s/keys :req [~@req] :req-un [~@req-un])]
+    `~spec))
 
 (defmacro struct 
   "Creates a strucutre based on a list of fields passed in
@@ -422,9 +434,20 @@
   ::baz would have 1, 2 and 4 applied
   ::bah would only have 1 and 2 applied"
   [& fields]
-  (let [[req req-un codec-keys] (eval `(process-fields ~@fields))
-        spec `(s/keys :req ~req :req-un ~req-un)]
-    `~spec)) 
+  `(let [f# (s/conform ::struct-fields [~@fields])
+         req# (mapv first (filter (fn [[a# b#]] (= a# b#)) f#))
+         req-un# (mapv first (filter (fn [[a# b#]] (= (keyword (name a#)) b#)) f#))
+         codec-keys# (mapv second f#)
+         key-args# (list :req req# :req-un req-un#)]
+         ; spec# `(s/keys :req ~req# :req-un ~req-un#)]
+     (s/keys ~@key-args#)))
+     
+
+     ; ~(s/keys :req `[~@req#] :req-un `[~@req-un#])))
+
+  ; (let [[req req-un codec-keys] (eval `(process-fields ~@fields))]))
+        ; spec `(s/keys :req ~req :req-un ~req-un)]
+    ; `~spec))
 
 (extend-type clojure.lang.PersistentArrayMap
   Codec
