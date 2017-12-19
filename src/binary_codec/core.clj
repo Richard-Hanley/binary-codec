@@ -65,6 +65,7 @@
   [c]
   (and (satisfies? Codec c) c))
 
+
 (defn codec-spec 
   "Given a codec codec-spec will return an associated spec, or nil.
   If the given codec is a keyword, then this will return the same keyword
@@ -101,6 +102,21 @@
           (when spec
             (with-name spec k)))))
     k))
+
+(defn get-codec [k]
+  (get @registry-ref k))
+
+(defn specified-codec 
+  "Returns the argument if the arg is either a reified codec with a spec in it's metadata
+  or if it is a keyword that is registered with both binary-codec.core and spec"
+  [k-or-codec]
+  (let [registered-keyword (and (keyword? k-or-codec)
+                                (s/get-spec k-or-codec)
+                                (get-codec k-or-codec)) 
+        codec (some? (:spec (meta (codec? k-or-codec))))]
+    (if (or registered-keyword codec)
+      k-or-codec
+      nil)))
 
 (defn defcodec [k c]
   (swap! registry-ref assoc k c))
@@ -380,16 +396,23 @@
 ;; A field is made up of either a tuple of [qualified-keyword raw-keyword]
 ;; or it is simply a fully-qualfied keyword.
 ;; This spec is used to detemine which type is being used
-(s/def ::field-type (s/or :destructured (s/tuple ::fully-qualified-keyword keyword)
+(s/def ::field-type (s/or :destructured (s/tuple #{:req :req-un} ::fully-qualified-keyword)
                           :raw ::fully-qualified-keyword))
 
+(s/def ::field-type-conformer (s/conformer
+                                (fn [k-or-tuple]
+                                  (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
+                                    (case k-type
+                                      :destructured k-value
+                                      :raw [:req k-value])))))
+
+(s/def ::field-is-keyword (comp keyword? second))
+(s/def ::keyword-is-registered (comp specified-codec second))
+
 ;; A field must be a tuple that has a fully qualified keyword for spec, and then a possibly unqualified field
-(s/def ::field (s/conformer
-                 (fn [k-or-tuple]
-                   (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
-                     (case k-type
-                       :destructured k-value
-                       :raw [k-value k-value])))))
+(s/def ::field (s/and ::field-type-conformer
+                      ::field-is-keyword 
+                      ::keyword-is-registered))
 
 
 (defn unqualified 
@@ -397,7 +420,7 @@
   This function can be used to force a struct to use the unqualified keyword for a field"
   [k]
   (if (s/valid? ::fully-qualified-keyword k)
-    [k (keyword (name k))]
+    [:req-un k]
     (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
   
 (defn qualified 
@@ -405,14 +428,46 @@
   Usually you do not need this function, and can instead pass a single keyword directly to a struct"
   [k]
   (if (s/valid? ::fully-qualified-keyword k)
-    [k k]
+    [:req k]
     (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
 
-(s/def ::struct-fields (s/coll-of ::field))
+(s/def ::fields (s/coll-of ::field :into []))
 
-(defmacro form-keys [req req-un]
-  (let [spec `(s/keys :req [~@req] :req-un [~@req-un])]
-    `~spec))
+(defn form-keys [fields]
+  (let [extract-fields (fn [k flds]
+                         (mapv second (filter #(= k (first %)) flds)))
+        req (extract-fields :req fields)
+        req-un (extract-fields :req-un fields)
+        spec `(s/keys :req ~req :req-un ~req-un)]
+    spec))
+
+
+(defn struct-impl [fields spec]
+  (let[codec-keys (map second fields)
+       data-keys (map
+                    (fn [[qual k]] 
+                      (if (= :req-un qual) 
+                        (keyword (name k)) 
+                        k))
+                    fields)]
+    (with-meta 
+      (reify Codec
+        (encode* [_ encoding])
+        (encoded?* [_])
+        (alignment* [_])
+        (sizeof* [_]
+          (reduce 
+            (fn [accum codec] nil
+              (if-let [size (sizeof codec)]
+                (+ accum size (alignment-padding (alignment codec) accum))
+                (reduced nil)))
+            0
+            codec-keys))
+        (sizeof* [_ data])
+        (to-buffer!* [_ data buffer])
+        (from-buffer!* [_ buffer]))
+      {:spec spec})))
+
 
 (defmacro struct 
   "Creates a strucutre based on a list of fields passed in
@@ -434,13 +489,26 @@
   ::baz would have 1, 2 and 4 applied
   ::bah would only have 1 and 2 applied"
   [& fields]
-  `(let [f# (s/conform ::struct-fields [~@fields])
-         req# (mapv first (filter (fn [[a# b#]] (= a# b#)) f#))
-         req-un# (mapv first (filter (fn [[a# b#]] (= (keyword (name a#)) b#)) f#))
-         codec-keys# (mapv second f#)
-         key-args# (list :req req# :req-un req-un#)]
-         ; spec# `(s/keys :req ~req# :req-un ~req-un#)]
-     (s/keys ~@key-args#)))
+  (let [proc-fields `[~@fields]
+        flds `(if (s/valid? ::fields ~proc-fields)
+               (s/conform ::fields ~proc-fields)
+               (throw 
+                 (IllegalArgumentException.
+                   (str "Unable to conform fields \n" (s/explain-str ::fields ~proc-fields)))))
+        spec `(form-keys ~flds)]
+          `(struct-impl ~flds (eval ~spec))))
+  ; (let [spec (form-keys (s/conform ::fields [fields]))]
+
+
+
+    ; `(s/keys ~@spec)))
+  ; `(let [f# (s/conform ::struct-fields [~@fields])
+  ;        req# (mapv first (filter (fn [[a# b#]] (= a# b#)) f#))
+  ;        req-un# (mapv first (filter (fn [[a# b#]] (= (keyword (name a#)) b#)) f#))
+  ;        codec-keys# (mapv second f#)
+  ;        key-args# (list :req req# :req-un req-un#)]
+  ;        ; spec# `(s/keys :req ~req# :req-un ~req-un#)]
+  ;    (s/keys ~@key-args#)))
      
 
      ; ~(s/keys :req `[~@req#] :req-un `[~@req-un#])))
