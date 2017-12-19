@@ -452,9 +452,9 @@
                     fields)]
     (with-meta 
       (reify Codec
-        (encode* [_ encoding])
+        (encode* [this encoding] this)
         (encoded?* [_])
-        (alignment* [_])
+        (alignment* [_] (apply max (map alignment codec-keys)))
         (sizeof* [_]
           (reduce 
             (fn [accum codec] nil
@@ -464,7 +464,7 @@
             0
             codec-keys))
         (sizeof* [_ data])
-        (to-buffer!* [_ data buffer])
+        (to-buffer!* [_ data buffer] buffer)
         (from-buffer!* [_ buffer]))
       {:spec spec})))
 
