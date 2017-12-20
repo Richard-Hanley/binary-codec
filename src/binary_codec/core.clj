@@ -291,9 +291,9 @@
 
 (s/def ::word-size #{1 2 4 8})
 
-(s/def ::base-encoding (s/keys :req [::byte-order ::word-size]))
+(s/def ::base-encoding (s/keys :req-un [::byte-order ::word-size]))
 
-(def base-encoding {::byte-order :endian/unspecified ::word-size 1})
+(def base-encoding {:byte-order :endian/unspecified :word-size 1})
 
 (defn- buffer-op-with-endian [endian buffer-op buffer]
   (if (= unspecified-order endian)
@@ -334,39 +334,39 @@
   ::int16
   (reify Codec
     (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
-    (alignment* [_ encoding] (min Short/BYTES (::word-size encoding)))
+    (alignment* [_ encoding] (min Short/BYTES (:word-size encoding)))
     (sizeof* [_ encoding] Short/BYTES)
     (sizeof* [_ encoding data] Short/BYTES)
     (to-buffer!* [_ encoding data buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.putShort % data) buffer))
+      (buffer-op-with-endian (:byte-order encoding) #(.putShort % data) buffer))
     (from-buffer!* [_ encoding buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.getShort %) buffer)))
+      (buffer-op-with-endian (:byte-order encoding) #(.getShort %) buffer)))
   (make-signed-integral-conformer short))
 
 (binary-codec.core/def 
   ::int32
   (reify Codec
     (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
-    (alignment* [_ encoding] (min Integer/BYTES (::word-size encoding)))
+    (alignment* [_ encoding] (min Integer/BYTES (:word-size encoding)))
     (sizeof* [_ encoding] Integer/BYTES)
     (sizeof* [_ encoding data] Integer/BYTES)
     (to-buffer!* [_ encoding data buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.putInt % data) buffer))
+      (buffer-op-with-endian (:byte-order encoding) #(.putInt % data) buffer))
     (from-buffer!* [_ encoding buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.getInt %) buffer)))
+      (buffer-op-with-endian (:byte-order encoding) #(.getInt %) buffer)))
   (make-signed-integral-conformer int))
 
 (binary-codec.core/def 
   ::int64
   (reify Codec
     (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
-    (alignment* [_ encoding] (min Long/BYTES (::word-size encoding)))
+    (alignment* [_ encoding] (min Long/BYTES (:word-size encoding)))
     (sizeof* [_ encoding] Long/BYTES)
     (sizeof* [_ encoding data] Long/BYTES)
     (to-buffer!* [_ encoding data buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.putLong % data) buffer))
+      (buffer-op-with-endian (:byte-order encoding) #(.putLong % data) buffer))
     (from-buffer!* [_ encoding buffer]
-      (buffer-op-with-endian (::byte-order encoding) #(.getLong %) buffer)))
+      (buffer-op-with-endian (:byte-order encoding) #(.getLong %) buffer)))
   (make-signed-integral-conformer long))
 
 (binary-codec.core/def ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
@@ -421,6 +421,33 @@
 ;              (make-variable-array-codec ~codec))]
 ;     `(with-meta ~c {:spec ~coll-spec})))
 
+
+; (s/def ::index-map (s/* (s/tuple number? map?)))
+; (s/def ::tuple-encoding (s/merge ::base-encoding
+                                 ; (s/keys :req-un [:byte-order :word-size])))
+(defn tuple-impl [codecs specs]
+    (with-meta 
+       (reify Codec
+         (encoder* [_ encoding]
+           (if (some? encoding)
+             (let [default-tuple (assoc base-encoding :index-map nil)
+                   global-encoding (merge base-encoding (dissoc encoding :index-map))
+                   index-map (:index-map encoding)]
+               ;Map over the codecs.  If there the index of the codec is in the index-map
+               ;merge it with the global encoding
+               (map (fn [c index]
+                      (encoder c (merge global-encoding (get index-map index))))
+                      codecs
+                      (range)))
+             (map encoder codecs)))
+         (alignment* [_ encoding])
+         (sizeof* [_ encoding])
+         (sizeof* [_ encoding data])
+         (to-buffer!* [_ encoding data buffer]
+           buffer)
+         (from-buffer!* [_ encoding buffer]))
+       {:spec specs}))
+
 ; (defn tuple-impl [codecs specs]
 ;     (with-meta 
 ;        (reify Codec
@@ -458,27 +485,27 @@
 ;            (into [] (doall (map #(from-buffer! % buffer) codecs)))))
 ;        {:spec specs}))
 
-; (defmacro tuple 
-;   "Given a list of codecs this will generate a codec and spec that takes a tuple (e.g. vector)
+(defmacro tuple 
+  "Given a list of codecs this will generate a codec and spec that takes a tuple (e.g. vector)
 
-;   When a tuple is encoded, the encoding map will be passed to every codec.  There is also a 
-;   special key :binary-codec.core/index-map which is made up of [index map] tuples.
+  When a tuple is encoded, the encoding map will be passed to every codec.  There is also a 
+  special key :binary-codec.core/index-map which is a map of indexes to encodings
 
-;   For example:
-;   (def tup (codec/tuple ::codec/uint8 ::codec/uint16 ::codec/uint8))
-;   (encode tup {::encoding/word-size 4 
-;                ::encoding/byte-order ::encoding/endian/little
-;                ::codec/index-map [[1 {::encoding/byte-order ::encoding/endian/big}]
-;                                   [2 {::encoding/byte-order ::encoding/endian/native}]]})
+  For example:
+  (def tup (codec/tuple ::codec/uint8 ::codec/uint16 ::codec/uint8))
+  (encode tup {:word-size 4 
+               :byte-order ::encoding/endian/little
+               :index-map {1 {:byte-order ::encoding/endian/big}
+                           2 {:byte-order ::encoding/endian/native}})
 
-;   Would encode the tuple with a word alignement of 4.  
-;   Element 0 would be encoded in little
-;   Element 1 would be in big endian
-;   Element 2 would be in network endian"
-;   [& codecs]
-;   (let [specs (mapv codec-spec codecs)
-;         tuple-spec `(s/tuple ~@specs)]
-;     `(tuple-impl [~@codecs] ~tuple-spec)))
+  Would encode the tuple with a word alignement of 4.  
+  Element 0 would be encoded in little
+  Element 1 would be in big endian
+  Element 2 would be in network endian"
+  [& codecs]
+  (let [specs (mapv codec-spec codecs)
+        tuple-spec `(s/tuple ~@specs)]
+    `(tuple-impl [~@codecs] ~tuple-spec)))
 
 
 ; ;; A fully qualified keyword is both a keyowrd and has a namespace
