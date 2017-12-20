@@ -273,10 +273,12 @@
 ;           (from-buffer! codec buffer))))
 ;       {:spec spec})))
 
+(def unspecified-order :endian/unspecified)
 (def byte-orders {:endian/little ByteOrder/LITTLE_ENDIAN
                   :endian/big ByteOrder/BIG_ENDIAN
                   :endian/native (ByteOrder/nativeOrder)
-                  :endian/network ByteOrder/BIG_ENDIAN})
+                  :endian/network ByteOrder/BIG_ENDIAN
+                  :endian/unspecified unspecified-order})
 
 ; Byte order spec looks up a keyword in the byte-orders map, or checks to see
 ; if the value is a ByteOrder.  Otherwise it  returns invalid
@@ -291,18 +293,16 @@
 
 (s/def ::base-encoding (s/keys :req [::byte-order ::word-size]))
 
-(def base-encoding {::byte-order ByteOrder/LITTLE_ENDIAN ::word-size 1})
+(def base-encoding {::byte-order :endian/unspecified ::word-size 1})
 
-(defn- buffer-op-with-endian [byte-order buffer-op buffer]
-  (let [[order-type order] byte-order
-        new-order (case order-type
-                    :keyed-order (get byte-orders order)
-                    :raw-order order)
-        old-order (.order buffer)]
-    (do
-      (.order buffer new-order)
-      (buffer-op buffer)
-      (.order buffer old-order))))
+(defn- buffer-op-with-endian [endian buffer-op buffer]
+  (if (= unspecified-order endian)
+    (buffer-op buffer)
+    (let [old-order (.order buffer)]
+      (do
+        (.order buffer endian)
+        (buffer-op buffer)
+        (.order buffer old-order)))))
 
 (defn validate-encoding [default-encoding spec encoding]
   "If passed encoding is not nil, then merge it with the base-encoding, and finally conform it
@@ -322,7 +322,7 @@
 (binary-codec.core/def
   ::int8 
   (reify Codec
-    (encoder* [this encoding] (validate-encoding base-encoding ::base-encoding encoding))
+    (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
     (alignment* [_ encoding] 1)
     (sizeof* [_ _] Byte/BYTES)
     (sizeof* [_ _ _] Byte/BYTES)
@@ -333,12 +333,14 @@
 (binary-codec.core/def
   ::int16
   (reify Codec
-    (encoder* [this encoding] (validate-encoding base-encoding ::base-encoding encoding))
-    (alignment* [_] 0)
-    (sizeof* [_] Short/BYTES)
-    (sizeof* [_ _] Short/BYTES)
-    (to-buffer!* [_ data buffer] (.putShort buffer data))
-    (from-buffer!* [_ buffer] (.getShort buffer)))
+    (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
+    (alignment* [_ encoding] (min Short/BYTES (::word-size encoding)))
+    (sizeof* [_ encoding] Short/BYTES)
+    (sizeof* [_ encoding data] Short/BYTES)
+    (to-buffer!* [_ encoding data buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.putShort % data) buffer))
+    (from-buffer!* [_ encoding buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.getShort %) buffer)))
   (make-signed-integral-conformer short))
 
 ; (binary-codec.core/def 
@@ -366,7 +368,7 @@
 ;   (make-signed-integral-conformer long))
 
 (binary-codec.core/def ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
-; (binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
+(binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
 ; (binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
 ; (defn lazy-pad

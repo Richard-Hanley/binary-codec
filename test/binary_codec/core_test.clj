@@ -6,10 +6,10 @@
             [binary-codec.core :as codec :refer :all]))
 
 
-(defn fill-buffer-with-offset-value [offset codec value] 
+(defn fill-buffer-with-offset-value [offset codec encoding value] 
   (let [buffer (ByteBuffer/allocate 40)]
     (dotimes [n offset] (.put buffer (byte 0)))
-    (to-buffer! codec value buffer)
+    (to-buffer! codec encoding value buffer)
     (.flip buffer)))
 
 (defn extract-byte-seq [num-bytes buffer]
@@ -71,104 +71,106 @@
       (testing "simple write"
         (is (= test-value (.get (.rewind (to-buffer! ::codec/int8 test-value (ByteBuffer/allocate 20))))))))))
 
-; (deftest test-short
-;   (testing "conformers"
-;     (testing "signed"
-;       (testing "zero"
-;         (is (= Short (type (s/conform ::codec/int16 0))))
-;         (is (= 0 (s/conform ::codec/int16 0))))
-;       (testing "middle value"
-;         (is (= Short (type (s/conform ::codec/int16 15))))
-;         (is (= 15 (s/conform ::codec/int16 15))))
-;         (is (= Short (type (s/conform ::codec/int16 752))))
-;         (is (= 752 (s/conform ::codec/int16 752)))
-;     (testing "max value"
-;       (is (= Short (type (s/conform ::codec/int16 32767))))
-;       (is (= 32767 (s/conform ::codec/int16 32767))))
-;     (testing "min value"
-;       (is (= Short (type (s/conform ::codec/int16 -32768))))
-;       (is (= -32768 (s/conform ::codec/int16 -32768))))
-;     (testing "invalid values"
-;       (is (= ::s/invalid (s/conform ::codec/int16 0xFFFF)))
-;       (is (= ::s/invalid (s/conform ::codec/int16 0x10000)))
-;       (is (= ::s/invalid (s/conform ::codec/int16 32768)))
-;       (is (= ::s/invalid (s/conform ::codec/int16 -32769)))))
-;     (testing "unsigned"
-;        (testing "zero"
-;           (is (= Short (type (s/conform ::codec/uint16 0))))
-;           (is (= 0 (s/conform ::codec/uint16 0))))
-;         (testing "middle value"
-;           (is (= Short (type (s/conform ::codec/uint16 15))))
-;           (is (= 15 (s/conform ::codec/uint16 15)))
-;           (is (= Short (type (s/conform ::codec/uint16 752))))
-;           (is (= 752 (s/conform ::codec/uint16 752))))
-;         (testing "max value"
-;           (is (= Short (type (s/conform ::codec/uint16 0xFFFF))))
-;           (is (= -1 (s/conform ::codec/uint16 0xFFFF))))
-;         (testing "min value"
-;           (is (= Short (type (s/conform ::codec/uint16 -32768))))
-;           (is (= -32768 (s/conform ::codec/uint16 -32768))))
-;         (testing "invalid values"
-;           (is (= ::s/invalid (s/conform ::codec/uint16 0x10000)))
-;           (is (= ::s/invalid (s/conform ::codec/uint16 -32769)))))
-;   (testing "sizeof"
-;     (is (= 2 (codec/sizeof ::codec/int16)))
-;     (is (= 2 (codec/sizeof ::codec/int16 (short 0x7FD)))))
-;   (testing "alignment value"
-;     (testing "Base Encoding (no alignment)"
-;       (is (= 0 (codec/alignment ::codec/int16))))
-;     (testing "Alignment specified (1-byte)"
-;       (is (= 1 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 1})))))
-;     (testing "alignment (codec/encode specified (2-byte)"
-;       (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 2})))))
-;     (testing "alignment (codec/encode specified (4-byte)"
-;       (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 4})))))
-;     (testing "alignment (codec/encode specified (8-byte)"
-;       (is (= 2 (codec/alignment (codec/encode ::codec/int16 {::encoding/word-size 8}))))))
-;   (testing "buffer operations"
-;     (let [test-value (short 0x7FD)
-;           test-bytes [(unchecked-byte 0x07) (unchecked-byte 0xFD)]
-;           aligned-int16 (codec/encode ::codec/int16 {::encoding/word-size 8})
-;           little-int16 (codec/encode ::codec/int16 {::encoding/byte-order :endian/little})
-;           big-int16 (codec/encode ::codec/int16 {::encoding/byte-order :endian/big})]
-;       (testing "simple read"
-;         (is (= test-value (from-buffer! ::codec/int16 (.rewind (.putShort (ByteBuffer/allocate 20) test-value))))))
-;       (testing "simple write"
-;         (is (= test-value (.getShort (.rewind (to-buffer! ::codec/int16 test-value (ByteBuffer/allocate 20)))))))
-;       (testing "read/write with alignment off by 1"
-;         (let [buffer (fill-buffer-with-offset-value 1 aligned-int16 test-value)]
-;           (is (= 0 (from-buffer! aligned-int16 buffer)))
-;           (is (= test-value (from-buffer! aligned-int16 buffer)))))
-;       (testing "read/write with alignment off by 2"
-;         (let [buffer (fill-buffer-with-offset-value 2 aligned-int16 test-value)]
-;           (is (= 0 (from-buffer! aligned-int16 buffer)))
-;           (is (= test-value (from-buffer! aligned-int16 buffer)))))
+(deftest test-short
+  (testing "conformers"
+    (testing "signed"
+      (testing "zero"
+        (is (= Short (type (s/conform ::codec/int16 0))))
+        (is (= 0 (s/conform ::codec/int16 0))))
+      (testing "middle value"
+        (is (= Short (type (s/conform ::codec/int16 15))))
+        (is (= 15 (s/conform ::codec/int16 15))))
+        (is (= Short (type (s/conform ::codec/int16 752))))
+        (is (= 752 (s/conform ::codec/int16 752)))
+    (testing "max value"
+      (is (= Short (type (s/conform ::codec/int16 32767))))
+      (is (= 32767 (s/conform ::codec/int16 32767))))
+    (testing "min value"
+      (is (= Short (type (s/conform ::codec/int16 -32768))))
+      (is (= -32768 (s/conform ::codec/int16 -32768))))
+    (testing "invalid values"
+      (is (= ::s/invalid (s/conform ::codec/int16 0xFFFF)))
+      (is (= ::s/invalid (s/conform ::codec/int16 0x10000)))
+      (is (= ::s/invalid (s/conform ::codec/int16 32768)))
+      (is (= ::s/invalid (s/conform ::codec/int16 -32769)))))
+    (testing "unsigned"
+       (testing "zero"
+          (is (= Short (type (s/conform ::codec/uint16 0))))
+          (is (= 0 (s/conform ::codec/uint16 0))))
+        (testing "middle value"
+          (is (= Short (type (s/conform ::codec/uint16 15))))
+          (is (= 15 (s/conform ::codec/uint16 15)))
+          (is (= Short (type (s/conform ::codec/uint16 752))))
+          (is (= 752 (s/conform ::codec/uint16 752))))
+        (testing "max value"
+          (is (= Short (type (s/conform ::codec/uint16 0xFFFF))))
+          (is (= -1 (s/conform ::codec/uint16 0xFFFF))))
+        (testing "min value"
+          (is (= Short (type (s/conform ::codec/uint16 -32768))))
+          (is (= -32768 (s/conform ::codec/uint16 -32768))))
+        (testing "invalid values"
+          (is (= ::s/invalid (s/conform ::codec/uint16 0x10000)))
+          (is (= ::s/invalid (s/conform ::codec/uint16 -32769))))))
+  (testing "sizeof"
+    (is (= 2 (codec/sizeof ::codec/int16)))
+    (is (= 2 (codec/sizeof ::codec/int16 nil (short 0x7FD)))))
+  (testing "alignment value"
+    (testing "Base Encoding (no alignment)"
+      (is (= 1 (codec/alignment ::codec/int16))))
+    (testing "Alignment specified (1-byte)"
+      (is (= 1 (codec/alignment ::codec/int16 {::codec/word-size 1}))))
+    (testing "alignment (codec/encode specified (2-byte)"
+      (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 2}))))
+    (testing "alignment (codec/encode specified (4-byte)"
+      (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 4}))))
+    (testing "alignment (codec/encode specified (8-byte)"
+      (is (= 2 (codec/alignment ::codec/int16 {::codec/word-size 8})))))
+  (testing "buffer operations"
+    (let [test-value (s/conform ::codec/int16 0x7FD)
+          test-bytes [(unchecked-byte 0x07) (unchecked-byte 0xFD)]
+          aligned-enc {::codec/word-size 8}]
+      (testing "simple read"
+        (is (= test-value (from-buffer! ::codec/int16 (.rewind (.putShort (ByteBuffer/allocate 20) test-value))))))
+      (testing "simple write"
+        (is (= test-value (.getShort (.rewind (to-buffer! ::codec/int16 test-value (ByteBuffer/allocate 20)))))))
+      (testing "read/write with alignment off by 1"
+        (let [buffer (fill-buffer-with-offset-value 1 ::codec/int16 aligned-enc test-value)]
+          (is (= 0 (from-buffer! ::codec/int16 aligned-enc buffer)))
+          (is (= test-value (from-buffer! ::codec/int16 aligned-enc buffer)))))
+      (testing "read/write with alignment off by 2"
+        (let [buffer (fill-buffer-with-offset-value 2 ::codec/int16 aligned-enc test-value)]
+          (is (= 0 (from-buffer! ::codec/int16 aligned-enc buffer)))
+          (is (= test-value (from-buffer! ::codec/int16 aligned-enc buffer)))))
       
-;       (testing "read/write to little endian buffer without encoding byte order"
-;         (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
-;                                                                           test-value
-;                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding"
-;         (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order :endian/big})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding literal"
-;         (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write to big endian buffer without encoding"
-;         (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding"
-;         (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order :endian/little})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding literal"
-;         (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! (codec/encode ::codec/int16 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-; ))))
+      (testing "read/write to little endian buffer without encoding byte order"
+        (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16 
+                                                                   {::codec/byte-order :endian/big}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16 
+                                                                   {::codec/byte-order ByteOrder/BIG_ENDIAN}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write to big endian buffer without encoding"
+        (is (= test-bytes (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16 
+                                                                             {::codec/byte-order :endian/little}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 2 (.rewind (to-buffer! ::codec/int16 
+                                                                             {::codec/byte-order ByteOrder/LITTLE_ENDIAN}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+)))
 
 ; (deftest test-integer
 ;   (testing "conformers"
