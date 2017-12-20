@@ -172,191 +172,204 @@
                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
 )))
 
-; (deftest test-integer
-;   (testing "conformers"
-;     (testing "unsigned"
-;       (testing "zero"
-;           (is (= Integer (type (s/conform ::codec/uint32 0))))
-;           (is (= 0 (s/conform ::codec/uint32 0))))
-;       (testing "middle value"
-;         (is (= Integer (type (s/conform ::codec/uint32 15))))
-;         (is (= 15 (s/conform ::codec/uint32 15)))
-;         (is (= Integer (type (s/conform ::codec/uint32 752))))
-;         (is (= 752 (s/conform ::codec/uint32 752))))
-;       (testing "max value"
-;         (is (= Integer (type (s/conform ::codec/uint32 0xFFFFFFFF))))
-;         (is (= -1 (s/conform ::codec/uint32 0xFFFFFFFF))))
-;       (testing "min value"
-;         (is (= Integer (type (s/conform ::codec/uint32 -2147483648))))
-;         (is (= -2147483648 (s/conform ::codec/uint32 -2147483648))))
-;       (testing "invalid values"
-;         (is (= ::s/invalid (s/conform ::codec/uint32 0x100000000)))
-;         (is (= ::s/invalid (s/conform ::codec/uint32 -2147483649))))))
-;   (testing "sizeof"
-;     (is (= 4 (codec/sizeof ::codec/int32)))
-;     (is (= 4 (codec/sizeof ::codec/int32 (short 0x7FD)))))
-;   (testing "alignment value"
-;     (testing "Base Encoding (no alignment)"
-;       (is (= 0 (codec/alignment ::codec/int32))))
-;     (testing "Alignment specified (1-byte)"
-;       (is (= 1 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 1})))))
-;     (testing "alignment (codec/encode specified (2-byte)"
-;       (is (= 2 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 2})))))
-;     (testing "alignment (codec/encode specified (4-byte)"
-;       (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 4})))))
-;     (testing "alignment (codec/encode specified (8-byte)"
-;       (is (= 4 (codec/alignment (codec/encode ::codec/int32 {::encoding/word-size 8}))))))
-;   (testing "buffer operations"
-;     (let [test-value (int 0x1337BEEF)
-;           test-bytes [(unchecked-byte 0x13 ) (unchecked-byte 0x37) (unchecked-byte 0xBE) (unchecked-byte 0xEF)]
-;           aligned-int32 (codec/encode ::codec/int32 {::encoding/word-size 8})
-;           little-int32 (codec/encode ::codec/int32 {::encoding/byte-order :endian/little})
-;           big-int32 (codec/encode ::codec/int32 {::encoding/byte-order :endian/big})]
-;       (testing "simple read"
-;         (is (= test-value (from-buffer! ::codec/int32 (.rewind (.putInt (ByteBuffer/allocate 20) test-value))))))
-;       (testing "simple write"
-;         (is (= test-value (.getInt (.rewind (to-buffer! ::codec/int32 test-value (ByteBuffer/allocate 20)))))))
-;       (testing "read/write with alignment off by 1"
-;         (let [buffer (fill-buffer-with-offset-value 1 aligned-int32 test-value)]
-;           (is (= 0 (from-buffer! aligned-int32 buffer)))
-;           (is (= test-value (from-buffer! aligned-int32 buffer)))))
-;       (testing "read/write with alignment off by 2"
-;         (let [buffer (fill-buffer-with-offset-value 2 aligned-int32 test-value)]
-;           (is (= 0 (from-buffer! aligned-int32 buffer)))
-;           (is (= test-value (from-buffer! aligned-int32 buffer)))))
-;       (testing "read/write with alignment off by 3"
-;         (let [buffer (fill-buffer-with-offset-value 3 aligned-int32 test-value)]
-;           (is (= 0 (from-buffer! aligned-int32 buffer)))
-;           (is (= test-value (from-buffer! aligned-int32 buffer)))))
-;       (testing "read/write with alignment off by 4"
-;         (let [buffer (fill-buffer-with-offset-value 4 aligned-int32 test-value)]
-;           (is (= 0 (from-buffer! aligned-int32 buffer)))
-;           (is (= test-value (from-buffer! aligned-int32 buffer)))))
-;       (testing "read/write to little endian buffer without encoding byte order"
-;         (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
-;                                                                           test-value
-;                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding"
-;         (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order :endian/big})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding literal"
-;         (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write to big endian buffer without encoding"
-;         (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding"
-;         (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order :endian/little})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding literal"
-;         (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! (codec/encode ::codec/int32 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-; )))
+(deftest test-integer
+  (testing "conformers"
+    (testing "unsigned"
+      (testing "zero"
+          (is (= Integer (type (s/conform ::codec/uint32 0))))
+          (is (= 0 (s/conform ::codec/uint32 0))))
+      (testing "middle value"
+        (is (= Integer (type (s/conform ::codec/uint32 15))))
+        (is (= 15 (s/conform ::codec/uint32 15)))
+        (is (= Integer (type (s/conform ::codec/uint32 752))))
+        (is (= 752 (s/conform ::codec/uint32 752))))
+      (testing "max value"
+        (is (= Integer (type (s/conform ::codec/uint32 0xFFFFFFFF))))
+        (is (= -1 (s/conform ::codec/uint32 0xFFFFFFFF))))
+      (testing "min value"
+        (is (= Integer (type (s/conform ::codec/uint32 -2147483648))))
+        (is (= -2147483648 (s/conform ::codec/uint32 -2147483648))))
+      (testing "invalid values"
+        (is (= ::s/invalid (s/conform ::codec/uint32 0x100000000)))
+        (is (= ::s/invalid (s/conform ::codec/uint32 -2147483649))))))
+  (testing "sizeof"
+    (is (= 4 (codec/sizeof ::codec/int32)))
+    (is (= 4 (codec/sizeof ::codec/int32 nil (int 0x7FD)))))
+  (testing "alignment value"
+    (testing "Base Encoding (no alignment)"
+      (is (= 1 (codec/alignment ::codec/int32))))
+    (testing "Alignment specified (1-byte)"
+      (is (= 1 (codec/alignment ::codec/int32 {::codec/word-size 1}))))
+    (testing "alignment (codec/encode specified (2-byte)"
+      (is (= 2 (codec/alignment ::codec/int32 {::codec/word-size 2}))))
+    (testing "alignment (codec/encode specified (4-byte)"
+      (is (= 4 (codec/alignment ::codec/int32 {::codec/word-size 4}))))
+    (testing "alignment (codec/encode specified (8-byte)"
+      (is (= 4 (codec/alignment ::codec/int32 {::codec/word-size 8})))))
+  (testing "buffer operations"
+    (let [test-value (int 0x1337BEEF)
+          test-bytes [(unchecked-byte 0x13 ) (unchecked-byte 0x37) (unchecked-byte 0xBE) (unchecked-byte 0xEF)]
+          aligned-int32 {::codec/word-size 8}]
+      (testing "simple read"
+        (is (= test-value 
+               (from-buffer! ::codec/int32 (.rewind 
+                                             (.putInt 
+                                               (ByteBuffer/allocate 20) 
+                                               test-value))))))
+      (testing "simple write"
+        (is (= test-value 
+               (.getInt 
+                 (.rewind 
+                   (to-buffer! ::codec/int32 test-value (ByteBuffer/allocate 20)))))))
+      (testing "read/write with alignment off by 1"
+        (let [buffer (fill-buffer-with-offset-value 1 ::codec/int32 aligned-int32 test-value)]
+          (is (= 0 (from-buffer! ::codec/int32 aligned-int32 buffer)))
+          (is (= test-value (from-buffer! ::codec/int32 aligned-int32 buffer)))))
+      (testing "read/write with alignment off by 2"
+        (let [buffer (fill-buffer-with-offset-value 2 ::codec/int32 aligned-int32 test-value)]
+          (is (= 0 (from-buffer! ::codec/int32 aligned-int32 buffer)))
+          (is (= test-value (from-buffer! ::codec/int32 aligned-int32 buffer)))))
+      (testing "read/write with alignment off by 3"
+        (let [buffer (fill-buffer-with-offset-value 3 ::codec/int32 aligned-int32 test-value)]
+          (is (= 0 (from-buffer! ::codec/int32 aligned-int32 buffer)))
+          (is (= test-value (from-buffer! ::codec/int32 aligned-int32 buffer)))))
+      (testing "read/write with alignment off by 4"
+        (let [buffer (fill-buffer-with-offset-value 4 ::codec/int32 aligned-int32 test-value)]
+          (is (= 0 (from-buffer! ::codec/int32 aligned-int32 buffer)))
+          (is (= test-value (from-buffer! ::codec/int32 aligned-int32 buffer)))))
+      (testing "read/write to little endian buffer without encoding byte order"
+        (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
+                                                                          test-value
+                                                                          (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32 
+                                                                   {::codec/byte-order :endian/big}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32 
+                                                                   {::codec/byte-order ByteOrder/BIG_ENDIAN}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write to big endian buffer without encoding"
+        (is (= test-bytes (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32 
+                                                                             {::codec/byte-order :endian/little}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 4 (.rewind (to-buffer! ::codec/int32 
+                                                                             {::codec/byte-order ByteOrder/LITTLE_ENDIAN}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+)))
 
-; (deftest test-long
-;   (testing "sizeof"
-;     (is (= 8 (codec/sizeof ::codec/int64)))
-;     (is (= 8 (codec/sizeof ::codec/int64 (long 0x7FD)))))
-;   (testing "alignment value"
-;     (testing "Base Encoding (no alignment)"
-;       (is (= 0 (codec/alignment ::codec/int64))))
-;     (testing "Alignment specified (1-byte)"
-;       (is (= 1 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 1})))))
-;     (testing "alignment (codec/encode specified (2-byte)"
-;       (is (= 2 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 2})))))
-;     (testing "alignment (codec/encode specified (4-byte)"
-;       (is (= 4 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 4})))))
-;     (testing "alignment (codec/encode specified (8-byte)"
-;       (is (= 8 (codec/alignment (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
-;   (testing "buffer operations"
-;     (let [test-value (long 0x13371234DEADBEEF)
-;           test-bytes [(unchecked-byte 0x13 ) (unchecked-byte 0x37) (unchecked-byte 0x12) 
-;                       (unchecked-byte 0x34) (unchecked-byte 0xDE) (unchecked-byte 0xAD)
-;                       (unchecked-byte 0xBE) (unchecked-byte 0xEF)]
-;           aligned-int64 (codec/encode ::codec/int64 {::encoding/word-size 8})
-;           little-int64 (codec/encode ::codec/int64 {::encoding/byte-order :endian/little})
-;           big-int64 (codec/encode ::codec/int64 {::encoding/byte-order :endian/big})]
-;       (testing "simple read"
-;         (is (= test-value (from-buffer! ::codec/int64 (.rewind (.putLong (ByteBuffer/allocate 20) test-value))))))
-;       (testing "simple write"
-;         (is (= test-value (.getLong (.rewind (to-buffer! ::codec/int64 test-value (ByteBuffer/allocate 20)))))))
-;       (testing "read/write with alignment off by 1"
-;         (let [buffer (fill-buffer-with-offset-value 1 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 2"
-;         (let [buffer (fill-buffer-with-offset-value 2 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 3"
-;         (let [buffer (fill-buffer-with-offset-value 3 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 4"
-;         (let [buffer (fill-buffer-with-offset-value 4 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 5"
-;         (let [buffer (fill-buffer-with-offset-value 5 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 6"
-;         (let [buffer (fill-buffer-with-offset-value 6 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 7"
-;         (let [buffer (fill-buffer-with-offset-value 7 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write with alignment off by 8"
-;         (let [buffer (fill-buffer-with-offset-value 8 aligned-int64 test-value)]
-;           (is (= 0 (from-buffer! aligned-int64 buffer)))
-;           (is (= test-value (from-buffer! aligned-int64 buffer)))))
-;       (testing "read/write to little endian buffer without encoding byte order"
-;         (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
-;                                                                           test-value
-;                                                                           (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding"
-;         (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order :endian/big})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write little endian buffer with big encoding literal"
-;         (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ByteOrder/BIG_ENDIAN})
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
-;       (testing "read/write to big endian buffer without encoding"
-;         (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
-;                                                                    test-value
-;                                                                    (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding"
-;         (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order :endian/little})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-;       (testing "read/write to big endian buffer with little encoding literal"
-;         (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! (codec/encode ::codec/int64 {::encoding/byte-order ByteOrder/LITTLE_ENDIAN})
-;                                                                              test-value
-;                                                                              (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
-; )))
+(deftest test-long
+  (testing "sizeof"
+    (is (= 8 (codec/sizeof ::codec/int64)))
+    (is (= 8 (codec/sizeof ::codec/int64 nil (long 0x7FD)))))
+  (testing "alignment value"
+    (testing "Base Encoding (no alignment)"
+      (is (= 1 (codec/alignment ::codec/int64))))
+    (testing "Alignment specified (1-byte)"
+      (is (= 1 (codec/alignment ::codec/int64 {::codec/word-size 1}))))
+    (testing "alignment (codec/encode specified (2-byte)"
+      (is (= 2 (codec/alignment ::codec/int64 {::codec/word-size 2}))))
+    (testing "alignment (codec/encode specified (4-byte)"
+      (is (= 4 (codec/alignment ::codec/int64 {::codec/word-size 4}))))
+    (testing "alignment (codec/encode specified (8-byte)"
+      (is (= 8 (codec/alignment ::codec/int64 {::codec/word-size 8})))))
+  (testing "buffer operations"
+    (let [test-value (long 0x13371234DEADBEEF)
+          test-bytes [(unchecked-byte 0x13 ) (unchecked-byte 0x37) (unchecked-byte 0x12) 
+                      (unchecked-byte 0x34) (unchecked-byte 0xDE) (unchecked-byte 0xAD)
+                      (unchecked-byte 0xBE) (unchecked-byte 0xEF)]
+          aligned-int64 {::codec/word-size 8}
+          little-int64 {::codec/byte-order :endian/little}
+          big-int64 {::codec/byte-order :endian/big}]
+      (testing "simple read"
+        (is (= test-value (from-buffer! ::codec/int64 (.rewind (.putLong (ByteBuffer/allocate 20) test-value))))))
+      (testing "simple write"
+        (is (= test-value (.getLong (.rewind (to-buffer! ::codec/int64 test-value (ByteBuffer/allocate 20)))))))
+      (testing "read/write with alignment off by 1"
+        (let [buffer (fill-buffer-with-offset-value 1 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 2"
+        (let [buffer (fill-buffer-with-offset-value 2 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 3"
+        (let [buffer (fill-buffer-with-offset-value 3 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 4"
+        (let [buffer (fill-buffer-with-offset-value 4 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 5"
+        (let [buffer (fill-buffer-with-offset-value 5 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 6"
+        (let [buffer (fill-buffer-with-offset-value 6 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 7"
+        (let [buffer (fill-buffer-with-offset-value 7 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write with alignment off by 8"
+        (let [buffer (fill-buffer-with-offset-value 8 ::codec/int64 aligned-int64 test-value)]
+          (is (= 0 (from-buffer! ::codec/int64 aligned-int64 buffer)))
+          (is (= test-value (from-buffer! ::codec/int64 aligned-int64 buffer)))))
+      (testing "read/write to little endian buffer without encoding byte order"
+        (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding"
+        (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64 
+                                                                   {::codec/byte-order :endian/big}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write little endian buffer with big encoding literal"
+        (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64 
+                                                                   {::codec/byte-order ByteOrder/BIG_ENDIAN}
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/LITTLE_ENDIAN)))))))
+      (testing "read/write to big endian buffer without encoding"
+        (is (= test-bytes (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64
+                                                                   test-value
+                                                                   (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding"
+        (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64 
+                                                                             {::codec/byte-order :endian/little}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+      (testing "read/write to big endian buffer with little encoding literal"
+        (is (= (reverse test-bytes) (extract-byte-seq 8 (.rewind (to-buffer! ::codec/int64 
+                                                                             {::codec/byte-order ByteOrder/LITTLE_ENDIAN}
+                                                                             test-value
+                                                                             (.order (ByteBuffer/allocate 20) ByteOrder/BIG_ENDIAN)))))))
+)))
 
 
 ; (deftest test-forced-alignmnet
 ;   (testing "force alignment to 8"
-;     (is (= 8 (codec/alignment (codec/align 8 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+;     (is (= 8 (codec/alignment (codec/align 8 (codec/encode ::codec/int64 {::codec/word-size 8}))))))
 ;   (testing "force alignment to less than primitive size"
-;     (is (= 8 (codec/alignment (codec/align 4 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+;     (is (= 8 (codec/alignment (codec/align 4 (codec/encode ::codec/int64 {::codec/word-size 8}))))))
 ;   (testing "force alignment to larger than primitive size"
-;     (is (= 16 (codec/alignment (codec/align 16 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+;     (is (= 16 (codec/alignment (codec/align 16 (codec/encode ::codec/int64 {::codec/word-size 8}))))))
 ;   (testing "alignment is not even multiple of base alignment"
-;     (is (thrown? IllegalArgumentException (codec/alignment (codec/align 15 (codec/encode ::codec/int64 {::encoding/word-size 8}))))))
+;     (is (thrown? IllegalArgumentException (codec/alignment (codec/align 15 (codec/encode ::codec/int64 {::codec/word-size 8}))))))
 ;   (testing "alignment is maintained after re-encoding"
-;     (is (= 16 (codec/alignment (codec/encode (codec/align 16 ::codec/int64) {::encoding/word-size 8})))))
+;     (is (= 16 (codec/alignment (codec/encode (codec/align 16 ::codec/int64) {::codec/word-size 8})))))
 ;   (testing "unaligned"
-;     (is (= 0 (codec/alignment (codec/unaligned (codec/encode ::codec/int64 {::encoding/word-size 8})))))))
+;     (is (= 0 (codec/alignment (codec/unaligned (codec/encode ::codec/int64 {::codec/word-size 8})))))))
 
 ; (codec/def ::tfoo (codec/tuple ::codec/int8 ::codec/int64 ::codec/int16))
 
@@ -368,19 +381,19 @@
 ;     (testing "too many arguments" (is (not (s/valid? ::tfoo [25 12324 754 12 9])))))
 ;   (testing "alignment"
 ;     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-;     (testing "1 byte" (is (= 1 (alignment (codec/encode ::tfoo {::encoding/word-size 1})))))
-;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::encoding/word-size 2})))))
-;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::encoding/word-size 4})))))
-;     (testing "8 byte" (is (= 8 (alignment (codec/encode ::tfoo {::encoding/word-size 8}))))))
+;     (testing "1 byte" (is (= 1 (alignment (codec/encode ::tfoo {::codec/word-size 1})))))
+;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::codec/word-size 2})))))
+;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::codec/word-size 4})))))
+;     (testing "8 byte" (is (= 8 (alignment (codec/encode ::tfoo {::codec/word-size 8}))))))
 ;   (testing "alignment using index-map"
-;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::encoding/word-size 2}]]})))))
-;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::encoding/word-size 4}]]}))))))
+;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::codec/word-size 2}]]})))))
+;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::tfoo {::codec/index-map [[1 {::codec/word-size 4}]]}))))))
 ;   (testing "sizeof"
 ;     (testing "unaligned" (is (= 11 (sizeof ::tfoo))))
-;     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::tfoo {::encoding/word-size 1})))))
-;     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::tfoo {::encoding/word-size 2})))))
-;     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::tfoo {::encoding/word-size 4})))))
-;     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::tfoo {::encoding/word-size 8}))))))
+;     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::tfoo {::codec/word-size 1})))))
+;     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::tfoo {::codec/word-size 2})))))
+;     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::tfoo {::codec/word-size 4})))))
+;     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::tfoo {::codec/word-size 8}))))))
 ;   (testing "buffer writing and reading"
 ;     (let [data (s/conform ::tfoo [25 0x31337DEADBEEF 754])
 ;           buffer (.flip 
@@ -394,16 +407,16 @@
 ; (deftest test-struct
 ;   (testing "alignment"
 ;     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
-;     (testing "1 byte" (is (= 1 (alignment (codec/encode ::mfoo {::encoding/word-size 1})))))
-;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::mfoo {::encoding/word-size 2})))))
-;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::mfoo {::encoding/word-size 4})))))
-;     (testing "8 byte" (is (= 8 (alignment (codec/encode ::mfoo {::encoding/word-size 8}))))))
+;     (testing "1 byte" (is (= 1 (alignment (codec/encode ::mfoo {::codec/word-size 1})))))
+;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::mfoo {::codec/word-size 2})))))
+;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::mfoo {::codec/word-size 4})))))
+;     (testing "8 byte" (is (= 8 (alignment (codec/encode ::mfoo {::codec/word-size 8}))))))
 ;   (testing "sizeof"
 ;     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
-;     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::mfoo {::encoding/word-size 1})))))
-;     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::mfoo {::encoding/word-size 2})))))
-;     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::mfoo {::encoding/word-size 4})))))
-;     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::mfoo {::encoding/word-size 8}))))))
+;     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::mfoo {::codec/word-size 1})))))
+;     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::mfoo {::codec/word-size 2})))))
+;     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::mfoo {::codec/word-size 4})))))
+;     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::mfoo {::codec/word-size 8}))))))
 ;   (testing "conformance"
 ;     (testing "valid values"
 ;       (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 :bane 2}))

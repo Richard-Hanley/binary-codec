@@ -343,33 +343,35 @@
       (buffer-op-with-endian (::byte-order encoding) #(.getShort %) buffer)))
   (make-signed-integral-conformer short))
 
-; (binary-codec.core/def 
-;   ::int32
-;   (reify Codec
-;     (encode* [this encoding] (encode-primitive this encoding))
-;     (encoded?* [_] true)
-;     (alignment* [_] 0)
-;     (sizeof* [_] Integer/BYTES)
-;     (sizeof* [_ _] Integer/BYTES)
-;     (to-buffer!* [_ data buffer] (.putInt buffer data))
-;     (from-buffer!* [_ buffer] (.getInt buffer)))
-;   (make-signed-integral-conformer int))
+(binary-codec.core/def 
+  ::int32
+  (reify Codec
+    (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
+    (alignment* [_ encoding] (min Integer/BYTES (::word-size encoding)))
+    (sizeof* [_ encoding] Integer/BYTES)
+    (sizeof* [_ encoding data] Integer/BYTES)
+    (to-buffer!* [_ encoding data buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.putInt % data) buffer))
+    (from-buffer!* [_ encoding buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.getInt %) buffer)))
+  (make-signed-integral-conformer int))
 
-; (binary-codec.core/def 
-;   ::int64
-;   (reify Codec
-;     (encode* [this encoding] (encode-primitive this encoding))
-;     (encoded?* [_] true)
-;     (alignment* [_] 0)
-;     (sizeof* [_] Long/BYTES)
-;     (sizeof* [_ _] Long/BYTES)
-;     (to-buffer!* [_ data buffer] (.putLong buffer data))
-;     (from-buffer!* [_ buffer] (.getLong buffer)))
-;   (make-signed-integral-conformer long))
+(binary-codec.core/def 
+  ::int64
+  (reify Codec
+    (encoder* [_ encoding] (validate-encoding base-encoding ::base-encoding encoding))
+    (alignment* [_ encoding] (min Long/BYTES (::word-size encoding)))
+    (sizeof* [_ encoding] Long/BYTES)
+    (sizeof* [_ encoding data] Long/BYTES)
+    (to-buffer!* [_ encoding data buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.putLong % data) buffer))
+    (from-buffer!* [_ encoding buffer]
+      (buffer-op-with-endian (::byte-order encoding) #(.getLong %) buffer)))
+  (make-signed-integral-conformer long))
 
 (binary-codec.core/def ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
 (binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
-; (binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
+(binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
 ; (defn lazy-pad
 ;   "Returns a lazy sequence which pads sequence with pad-value."
