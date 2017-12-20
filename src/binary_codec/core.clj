@@ -163,6 +163,13 @@
    (let [codec (resolve-codec codec-or-k)]
      (alignment* codec (encoder* codec encoding)))))
 
+(defn unchecked-alignment
+  "Same as alignment, but it requires the encoding to be specified, and does
+  not do any validation of the encoding"
+  [codec-or-k encoding]
+   (let [codec (resolve-codec codec-or-k)]
+     (alignment* codec encoding)))
+
 (defn sizeof 
   "Gets the size of the codec with a given encoding. If no encoding is specified then
   the default encoding is used.  Some codecs do no have static sizes, and so they must
@@ -175,6 +182,16 @@
    (let [codec (resolve-codec codec-or-k)]
      (sizeof* codec (encoder* codec encoding) data))))
 
+(defn unchecked-sizeof
+  "Same as sizeof, but it requires the encoding to be specified, and does
+  not do any validation of the encoding"
+  ([codec-or-k encoding] 
+   (let [codec (resolve-codec codec-or-k)]
+     (sizeof* codec encoding)))
+  ([codec-or-k encoding data] 
+   (let [codec (resolve-codec codec-or-k)]
+     (sizeof* codec encoding data))))
+
 (defn to-buffer!
   "Writes data to a java.nio.ByteBuffer using the given codec and encoding.
   If no encoding is specified then the default encoding is used"
@@ -186,6 +203,15 @@
        (align-buffer-write (alignment* codec enc) buffer)
        (to-buffer!* codec enc data buffer)))))
 
+(defn unchecked-to-buffer!
+  "Same as to-buffer!, but it requires the encoding to be specified, and does
+  not do any validation of the encoding"
+  [codec-or-k encoding data buffer]
+   (let [codec (resolve-codec codec-or-k)]
+     (do
+       (align-buffer-write (alignment* codec encoder) buffer)
+       (to-buffer!* codec encoder data buffer))))
+
 (defn from-buffer!
   "Reads data from a java.nio.ByteBuffer using the given codec and encoding.
   If no encoding is specified then the default encoding is used"
@@ -196,6 +222,15 @@
      (do
        (align-buffer-read (alignment* codec enc) buffer)
        (from-buffer!* codec enc buffer)))))
+
+(defn unchecked-from-buffer!
+  "Same as from-buffer!, but it requires the encoding to be specified, and does
+  not do any validation of the encoding"
+  [codec-or-k encoding buffer]
+   (let [codec (resolve-codec codec-or-k)]
+     (do
+       (align-buffer-read (alignment* codec encoder) buffer)
+       (from-buffer!* codec encoder buffer))))
 
 ; (defn alignment
 ;   "Gets the alignment of a codec with a given encoding.  If no encoding is passed,
@@ -373,12 +408,12 @@
 (binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
 (binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
-; (defn lazy-pad
-;   "Returns a lazy sequence which pads sequence with pad-value."
-;   [sequence pad-value]
-;   (if (empty? sequence)
-;     (repeat pad-value)
-;     (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
+(defn lazy-pad
+  "Returns a lazy sequence which pads sequence with pad-value."
+  [sequence pad-value]
+  (if (empty? sequence)
+    (repeat pad-value)
+    (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
 ; ;; TODO
 ; ;; Manage alignment of complex codecs
@@ -440,12 +475,27 @@
                       codecs
                       (range)))
              (map encoder codecs)))
-         (alignment* [_ encoding])
-         (sizeof* [_ encoding])
-         (sizeof* [_ encoding data])
+         (alignment* [_ encoding] (apply max (map unchecked-alignment codecs encoding)))
+         (sizeof* [_ encoding]
+           (reduce (fn [accum [c enc]]
+                     (if-let [size (unchecked-sizeof c enc)]
+                       (+ accum size (alignment-padding (unchecked-alignment c enc) accum))
+                       (reduced nil)))
+                   0
+                   (map vector codecs encoding)))
+         (sizeof* [_ encoding data]
+           (reduce (fn [accum [c enc elem]]
+                     (if-let [size (unchecked-sizeof c enc elem)]
+                       (+ accum size (alignment-padding (unchecked-alignment c enc) accum))
+                       (reduced nil)))
+                   0
+                   (map vector codecs encoding data)))
          (to-buffer!* [_ encoding data buffer]
+           (doseq [[codec enc elem] (map vector codecs encoding data)]
+             (to-buffer! codec enc elem buffer))
            buffer)
-         (from-buffer!* [_ encoding buffer]))
+         (from-buffer!* [_ encoding buffer]
+           (into [] (doall (map #(from-buffer! %1 %2 buffer) codecs encoding)))))
        {:spec specs}))
 
 ; (defn tuple-impl [codecs specs]
