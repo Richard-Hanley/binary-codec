@@ -400,40 +400,41 @@
                    (to-buffer! ::tfoo data (ByteBuffer/allocate 40)))]
       (is (= data (from-buffer! ::tfoo buffer))))))
 
-; (codec/def ::mfoo (codec/struct
-;                     (codec/def ::bar ::codec/uint8 (s/int-in 12 20))
-;                     (codec/def ::baz ::codec/int64 odd?)
-;                     (codec/unqualified (codec/def ::bane ::codec/int16 #{1 2 4 8 754}))))
-; (deftest test-struct
-;   (testing "alignment"
-;     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
-;     (testing "1 byte" (is (= 1 (alignment (codec/encode ::mfoo {:word-size 1})))))
-;     (testing "2 byte" (is (= 2 (alignment (codec/encode ::mfoo {:word-size 2})))))
-;     (testing "4 byte" (is (= 4 (alignment (codec/encode ::mfoo {:word-size 4})))))
-;     (testing "8 byte" (is (= 8 (alignment (codec/encode ::mfoo {:word-size 8}))))))
-;   (testing "sizeof"
-;     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
-;     (testing "1 byte alignment" (is (= 11 (sizeof (codec/encode ::mfoo {:word-size 1})))))
-;     (testing "2 byte alignment" (is (= 12 (sizeof (codec/encode ::mfoo {:word-size 2})))))
-;     (testing "4 byte alignment" (is (= 14 (sizeof (codec/encode ::mfoo {:word-size 4})))))
-;     (testing "8 byte alignment" (is (= 18 (sizeof (codec/encode ::mfoo {:word-size 8}))))))
-;   (testing "conformance"
-;     (testing "valid values"
-;       (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 :bane 2}))
-;       (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 :bane 754})))
-;     (testing "invalid ::bar"
-;       (is (not (s/valid? ::mfoo {::bar 11 ::baz 1245789 :bane 2})))
-;       (is (not (s/valid? ::mfoo {::bar 20 ::baz 1245789 :bane 2}))))
-;     (testing "invalid baz"
-;       (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 2}))))
-;     (testing "invalid bane"
-;       (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 3})))
-;       (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 9})))))
-;   (let [data (s/conform ::mfoo {:bane 754 ::baz 0x31337DEADBEEF ::bar 15})
-;         buffer (.flip 
-;                  (to-buffer! ::mfoo data (ByteBuffer/allocate 40)))]
-;     (is (= data (from-buffer! ::mfoo buffer))))
-;   (testing "individual key encoding"))
+(codec/def ::mfoo (codec/struct
+                    (codec/def ::bar ::codec/uint8 (s/int-in 12 20))
+                    (codec/def ::baz ::codec/int64 odd?)
+                    (codec/unqualified (codec/def ::bane ::codec/int16 #{1 2 4 8 754}))))
+(deftest test-struct
+  (testing "alignment"
+    (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
+    (testing "1 byte" (is (= 1 (alignment ::mfoo {:word-size 1}))))
+    (testing "2 byte" (is (= 2 (alignment ::mfoo {:word-size 2}))))
+    (testing "4 byte" (is (= 4 (alignment ::mfoo {:word-size 4}))))
+    (testing "8 byte" (is (= 8 (alignment ::mfoo {:word-size 8})))))
+  (testing "sizeof"
+    (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
+    (testing "unaligned" (is (= 11 (sizeof ::mfoo nil {::bar 15 ::baz 1245789 :bane 2}))))
+    (testing "1 byte alignment" (is (= 11 (sizeof ::mfoo {:word-size 1}))))
+    (testing "2 byte alignment" (is (= 12 (sizeof ::mfoo {:word-size 2}))))
+    (testing "4 byte alignment" (is (= 14 (sizeof ::mfoo {:word-size 4}))))
+    (testing "8 byte alignment" (is (= 18 (sizeof ::mfoo {:word-size 8})))))
+  (testing "conformance"
+    (testing "valid values"
+      (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 :bane 2}))
+      (is (s/valid? ::mfoo {::bar 15 ::baz 1245789 :bane 754})))
+    (testing "invalid ::bar"
+      (is (not (s/valid? ::mfoo {::bar 11 ::baz 1245789 :bane 2})))
+      (is (not (s/valid? ::mfoo {::bar 20 ::baz 1245789 :bane 2}))))
+    (testing "invalid baz"
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 2}))))
+    (testing "invalid bane"
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 3})))
+      (is (not (s/valid? ::mfoo {::bar 12 ::baz 4 :bane 9})))))
+  (let [data (s/conform ::mfoo {:bane 754 ::baz 0x31337DEADBEEF ::bar 15})
+        buffer (.rewind
+                 (to-buffer! ::mfoo data (ByteBuffer/allocate 40)))]
+    (is (= data (from-buffer! ::mfoo buffer))))
+  (testing "individual key encoding"))
 
 ; (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 ; (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})

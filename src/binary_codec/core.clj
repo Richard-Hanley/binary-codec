@@ -209,8 +209,8 @@
   [codec-or-k encoding data buffer]
    (let [codec (resolve-codec codec-or-k)]
      (do
-       (align-buffer-write (alignment* codec encoder) buffer)
-       (to-buffer!* codec encoder data buffer))))
+       (align-buffer-write (alignment* codec encoding) buffer)
+       (to-buffer!* codec encoding data buffer))))
 
 (defn from-buffer!
   "Reads data from a java.nio.ByteBuffer using the given codec and encoding.
@@ -229,8 +229,8 @@
   [codec-or-k encoding buffer]
    (let [codec (resolve-codec codec-or-k)]
      (do
-       (align-buffer-read (alignment* codec encoder) buffer)
-       (from-buffer!* codec encoder buffer))))
+       (align-buffer-read (alignment* codec encoding) buffer)
+       (from-buffer!* codec encoding buffer))))
 
 ; (defn alignment
 ;   "Gets the alignment of a codec with a given encoding.  If no encoding is passed,
@@ -465,13 +465,12 @@
        (reify Codec
          (encoder* [_ encoding]
            (if (some? encoding)
-             (let [default-tuple (assoc base-encoding :index-map nil)
-                   global-encoding (merge base-encoding (dissoc encoding :index-map))
+             (let [tuple-encoding (merge base-encoding (dissoc encoding :index-map))
                    index-map (:index-map encoding)]
                ;Map over the codecs.  If there the index of the codec is in the index-map
                ;merge it with the global encoding
                (map (fn [c index]
-                      (encoder c (merge global-encoding (get index-map index))))
+                      (encoder c (merge tuple-encoding (get index-map index))))
                       codecs
                       (range)))
              (map encoder codecs)))
@@ -492,48 +491,11 @@
                    (map vector codecs encoding data)))
          (to-buffer!* [_ encoding data buffer]
            (doseq [[codec enc elem] (map vector codecs encoding data)]
-             (to-buffer! codec enc elem buffer))
+             (unchecked-to-buffer! codec enc elem buffer))
            buffer)
          (from-buffer!* [_ encoding buffer]
-           (into [] (doall (map #(from-buffer! %1 %2 buffer) codecs encoding)))))
+           (into [] (doall (map #(unchecked-from-buffer! %1 %2 buffer) codecs encoding)))))
        {:spec specs}))
-
-; (defn tuple-impl [codecs specs]
-;     (with-meta 
-;        (reify Codec
-;          (encode* [_ encoding]
-;            (let [index-map (into {} (::index-map encoding))
-;                  ;; Map over each codec and merge the encoding with the index map
-;                  new-codecs (map (fn [c i]
-;                                    (encode c (merge encoding (get index-map i))))
-;                                  codecs
-;                                  (range))]
-;              (tuple-impl new-codecs specs)))
-;          (encoded?* [_] (every? encoded? codecs))
-;          (alignment* [_] (apply max (map alignment codecs)))
-;          (sizeof* [_]
-;            (reduce 
-;              (fn [accum codec] nil
-;                (if-let [size (sizeof codec)]
-;                  (+ accum size (alignment-padding (alignment codec) accum))
-;                  (reduced nil)))
-;              0
-;              codecs))
-;          (sizeof* [_ data]
-;            (reduce 
-;              (fn [accum [codec elem]] nil
-;                (if-let [size (sizeof codec elem)]
-;                  (+ accum size (alignment-padding (alignment codec) accum))
-;                  (reduced nil)))
-;              0
-;              (map vector codecs (lazy-pad data nil))))
-;          (to-buffer!* [_ data buffer]
-;            (doseq [[codec elem] (map vector codecs data)]
-;              (to-buffer! codec elem buffer))
-;            buffer)
-;          (from-buffer!* [_ buffer]
-;            (into [] (doall (map #(from-buffer! % buffer) codecs)))))
-;        {:spec specs}))
 
 (defmacro tuple 
   "Given a list of codecs this will generate a codec and spec that takes a tuple (e.g. vector)
@@ -543,7 +505,7 @@
 
   For example:
   (def tup (codec/tuple ::codec/uint8 ::codec/uint16 ::codec/uint8))
-  (encode tup {:word-size 4 
+  (alignmnet tup {:word-size 4 
                :byte-order ::encoding/endian/little
                :index-map {1 {:byte-order ::encoding/endian/big}
                            2 {:byte-order ::encoding/endian/native}})
@@ -558,114 +520,142 @@
     `(tuple-impl [~@codecs] ~tuple-spec)))
 
 
-; ;; A fully qualified keyword is both a keyowrd and has a namespace
-; (s/def ::fully-qualified-keyword (s/and keyword
-;                                         namespace))
+;; A fully qualified keyword is both a keyowrd and has a namespace
+(s/def ::fully-qualified-keyword (s/and keyword
+                                        namespace))
 
-; ;; A field is made up of either a tuple of [qualified-keyword raw-keyword]
-; ;; or it is simply a fully-qualfied keyword.
-; ;; This spec is used to detemine which type is being used
-; (s/def ::field-type (s/or :destructured (s/tuple #{:req :req-un} ::fully-qualified-keyword)
-;                           :raw ::fully-qualified-keyword))
+;; A field is made up of either a tuple of [qualified-keyword raw-keyword]
+;; or it is simply a fully-qualfied keyword.
+;; This spec is used to detemine which type is being used
+(s/def ::field-type (s/or :destructured (s/tuple #{:req :req-un} ::fully-qualified-keyword)
+                          :raw ::fully-qualified-keyword))
 
-; (s/def ::field-type-conformer (s/conformer
-;                                 (fn [k-or-tuple]
-;                                   (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
-;                                     (case k-type
-;                                       :destructured k-value
-;                                       :raw [:req k-value])))))
+(s/def ::field-type-conformer (s/conformer
+                                (fn [k-or-tuple]
+                                  (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
+                                    (case k-type
+                                      :destructured k-value
+                                      :raw [:req k-value])))))
 
-; (s/def ::field-is-keyword (comp keyword? second))
-; (s/def ::keyword-is-registered (comp specified-codec? second))
+(s/def ::field-is-keyword (comp keyword? second))
+(s/def ::keyword-is-registered (comp specified-codec? second))
 
-; ;; A field must be a tuple that has a fully qualified keyword for spec, and then a possibly unqualified field
-; (s/def ::field (s/and ::field-type-conformer
-;                       ::field-is-keyword 
-;                       ::keyword-is-registered))
+;; A field must be a tuple that has a fully qualified keyword for spec, and then a possibly unqualified field
+(s/def ::field (s/and ::field-type-conformer
+                      ::field-is-keyword 
+                      ::keyword-is-registered))
 
 
-; (defn unqualified 
-;   "Produces a tuple of the passed keyword and an unqualified version of the keyword
-;   This function can be used to force a struct to use the unqualified keyword for a field"
-;   [k]
-;   (if (s/valid? ::fully-qualified-keyword k)
-;     [:req-un k]
-;     (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
+(defn unqualified 
+  "Produces a tuple of the passed keyword and an unqualified version of the keyword
+  This function can be used to force a struct to use the unqualified keyword for a field"
+  [k]
+  (if (s/valid? ::fully-qualified-keyword k)
+    [:req-un k]
+    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
   
-; (defn qualified 
-;   "Produces a tuple of fully qualified keyword followed by the same fully qualified keyword
-;   Usually you do not need this function, and can instead pass a single keyword directly to a struct"
-;   [k]
-;   (if (s/valid? ::fully-qualified-keyword k)
-;     [:req k]
-;     (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
+(defn qualified 
+  "Produces a tuple of fully qualified keyword followed by the same fully qualified keyword
+  Usually you do not need this function, and can instead pass a single keyword directly to a struct"
+  [k]
+  (if (s/valid? ::fully-qualified-keyword k)
+    [:req k]
+    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
 
-; (s/def ::fields (s/coll-of ::field :into []))
+(s/def ::fields (s/coll-of ::field :into []))
 
-; (defn form-keys [fields]
-;   (let [extract-fields (fn [k flds]
-;                          (mapv second (filter #(= k (first %)) flds)))
-;         req (extract-fields :req fields)
-;         req-un (extract-fields :req-un fields)
-;         spec `(s/keys :req ~req :req-un ~req-un)]
-;     spec))
-
-
-; (defn struct-impl [fields spec]
-;   (let[codec-keys (map second fields)
-;        data-keys (map
-;                     (fn [[qual k]] 
-;                       (if (= :req-un qual) 
-;                         (keyword (name k)) 
-;                         k))
-;                     fields)]
-;     (with-meta 
-;       (reify Codec
-;         (encode* [this encoding] this)
-;         (encoded?* [_] (every? encoded? codecs))
-;         (alignment* [_] (apply max (map alignment codec-keys)))
-;         (sizeof* [_]
-;           (reduce 
-;             (fn [accum codec] nil
-;               (if-let [size (sizeof codec)]
-;                 (+ accum size (alignment-padding (alignment codec) accum))
-;                 (reduced nil)))
-;             0
-;             codec-keys))
-;         (sizeof* [_ data])
-;         (to-buffer!* [_ data buffer] buffer)
-;         (from-buffer!* [_ buffer]))
-;       {:spec spec})))
+(defn form-keys [fields]
+  (let [extract-fields (fn [k flds]
+                         (mapv second (filter #(= k (first %)) flds)))
+        req (extract-fields :req fields)
+        req-un (extract-fields :req-un fields)
+        spec `(s/keys :req ~req :req-un ~req-un)]
+    spec))
 
 
-; (defmacro struct 
-;   "Creates a strucutre based on a list of fields passed in
-;   A field can be either a fully qualified keyword registiered with spec,
-;   or it can be a keyword that has been destructured using unqualified-field.
+(defn struct-impl [fields spec]
+  (let[codec-keys (map second fields)
+       data-keys (map
+                    (fn [[qual k]] 
+                      (if (= :req-un qual) 
+                        (keyword (name k)) 
+                        k))
+                    fields)]
+    (with-meta 
+      (reify Codec
+        (encoder* [_ encoding]
+           (if (some? encoding)
+             (let [struct-encoding (merge base-encoding (dissoc encoding :key-map))
+                   key-map (:key-map encoding)]
+               ;Map over the codecs.  If there the index of the codec is in the index-map
+               ;merge it with the global encoding
+               (into {} (map (fn [ck]
+                               [ck (encoder ck (merge struct-encoding (get key-map ck)))])
+                             codec-keys)))
+             (into {} (map #(vector % (encoder %)) codec-keys))))
+        (alignment* [_ encoding] (apply max (map #(unchecked-alignment % (get encoding %)) codec-keys)))
+        (sizeof* [_ encoding]
+          (reduce (fn [accum ck]
+                    (let [enc (get encoding ck)
+                          size (unchecked-sizeof ck enc)]
+                      (if (some? size)
+                        (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
+                        (reduced nil))))
+                  0
+                  codec-keys))
+        (sizeof* [_ encoding data]
+          (reduce (fn [accum [ck dk]]
+                    (let [enc (get encoding ck)
+                          elem (get data dk)
+                          size (unchecked-sizeof ck enc elem)]
+                      (if (some? size)
+                        (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
+                        (reduced nil))))
+                  0
+                  (map vector codec-keys data-keys)))
+        (to-buffer!* [_ encoding data buffer] 
+           (doseq [[ck dk] (map vector codec-keys data-keys)]
+             (unchecked-to-buffer! ck (get encoding ck) (get data dk) buffer))
+           buffer)
+        (from-buffer!* [_ encoding buffer]
+          (into {} (doall (map (fn [ck dk]
+                                 (let [enc (get encoding ck)
+                                       val (unchecked-from-buffer! ck enc buffer)]
+                                   [dk val]))
+                               codec-keys data-keys)))))
+      {:spec spec})))
 
-;   When using the codec fields are evaluated in order.  When using the struct
-;   all keywords are used as :req arguments to s/keys, while destructured keywords
-;   are used as :req-un arguments
+
+(defmacro struct 
+  "Creates a strucutre based on a list of fields passed in
+  A field can be either a fully qualified keyword registiered with spec,
+  or it can be a keyword that has been destructured using unqualified-field.
+
+  When using the codec fields are evaluated in order.  When using the struct
+  all keywords are used as :req arguments to s/keys, while destructured keywords
+  are used as :req-un arguments
   
-;   When encoding a struct, there are some special keys that can be sent.  If there is key
-;   in the encoding that matches one of the codecs key, then that value will be merged in
-;   with the encoding
+  When encoding a struct, there is a special key that can be included 'key-map'. If there is 
+  a key in the key-map that matches one of the codecs key, then that value will be merged in
+  with the encoding
   
-;   For example if there is a struct foo, that has codec ::bar ::baz ::bah, then in the following example
-;   (encode foo {:some-encoding '1 :some-other-encoding '2 ::bar '3 ::baz '4}) 
+  For example if there is a struct foo, that has codec ::bar ::baz ::bah, then in the following example
+  (def foo foo [::bar ::baz ::plo]) 
+  (alignment foo {:word-size 4 :key-map {::bar {:word-size 8}
+                                         ::baz {:byte-order :endian/big})
 
-;   ::bar would have 1, 2, and 3 applied
-;   ::baz would have 1, 2 and 4 applied
-;   ::bah would only have 1 and 2 applied"
-;   [& fields]
-;   (let [proc-fields `[~@fields]
-;         flds `(if (s/valid? ::fields ~proc-fields)
-;                (s/conform ::fields ~proc-fields)
-;                (throw 
-;                  (IllegalArgumentException.
-;                    (str "Unable to conform fields \n" (s/explain-str ::fields ~proc-fields)))))
-;         spec `(form-keys ~flds)]
-;           `(struct-impl ~flds (eval ~spec))))
+  ::baz and ::plo would have a word size of 4
+  ::bar would have a word size of 8
+  ::baz would have a big endian encoding"
+  [& fields]
+  (let [proc-fields `[~@fields]
+        flds `(if (s/valid? ::fields ~proc-fields)
+               (s/conform ::fields ~proc-fields)
+               (throw 
+                 (IllegalArgumentException.
+                   (str "Unable to conform fields \n" (s/explain-str ::fields ~proc-fields)))))
+        spec `(form-keys ~flds)]
+          `(struct-impl ~flds (eval ~spec))))
 
 ; (defn align 
 ;   "Similar to the __align pragma in C, this can be used to add extra alignment padding
