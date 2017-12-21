@@ -1,4 +1,4 @@
-(defproject binary-codec "0.1.2-SNAPSHOT"
+(defproject binary-codec "0.2.0"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
