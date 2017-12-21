@@ -473,20 +473,54 @@
 ;       (testing "encoding" (is (= food data))))))
 
 
-; (codec/def ::fixed-array (codec/array ::codec/uint16 :count 5))
-; (codec/def ::var-array (codec/array ::codec/uint16))
-; (codec/def ::bounded-array (codec/array ::codec/uint16 :min-count 3 :max-count 6))
+(codec/def ::fixed-array (codec/array ::codec/uint16 :count 5))
+(codec/def ::var-array (codec/array ::codec/uint16))
+(codec/def ::bounded-array (codec/array ::codec/uint16 :min-count 3 :max-count 6))
 
-; (deftest test-array
-;   (testing "invalid values"
-;     (testing "invalid values" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4 "Hello this string is not a number"]))))
-;     (testing "variable array invalid values" (is (s/invalid? (s/conform ::var-array [1 2 3 4 "Hello this string is not a number"]))))
-;     (testing "wrong length for fixed size" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4]))))
-;     (testing "not enough for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2]))))
-;     (testing "too many for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2 3 4 5 6 7]))))
-;     )
-;   (testing "valid values"
-;     (testing "fixed array" (is (= [1 2 3 4 5] (s/conform ::fixed-array '(1 2 3 4 5)))))
-;     (testing "var array " (is (= [1 2] (s/conform ::var-array [1 2]))))
-;     (testing "bounded array" (is (= [1 2 3 4] (s/conform ::bounded-array [1 2 3 4]))))))
-
+(deftest test-array
+  (testing "invalid values"
+    (testing "invalid values" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4 "Hello this string is not a number"]))))
+    (testing "variable array invalid values" (is (s/invalid? (s/conform ::var-array [1 2 3 4 "Hello this string is not a number"]))))
+    (testing "wrong length for fixed size" (is (s/invalid? (s/conform ::fixed-array [1 2 3 4]))))
+    (testing "not enough for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2]))))
+    (testing "too many for bounded array" (is (s/invalid? (s/conform ::bounded-array [1 2 3 4 5 6 7]))))
+    )
+  (testing "valid values"
+    (testing "fixed array" (is (= [1 2 3 4 5] (s/conform ::fixed-array '(1 2 3 4 5)))))
+    (testing "var array " (is (= [1 2] (s/conform ::var-array [1 2]))))
+    (testing "bounded array" (is (= [1 2 3 4] (s/conform ::bounded-array [1 2 3 4])))))
+  (testing "alignment constant array"
+    (testing "unaligned" (is (= 1 (codec/alignment ::fixed-array))))
+    (testing "1 byte" (is (= 1 (codec/alignment ::fixed-array {:word-size 1}))))
+    (testing "2 byte" (is (= 2 (codec/alignment ::fixed-array {:word-size 2}))))
+    (testing "4 byte" (is (= 2 (codec/alignment ::fixed-array {:word-size 4})))))
+  (testing "alignment variable array"
+    (testing "unaligned" (is (= 1 (codec/alignment ::var-array))))
+    (testing "1 byte" (is (= 1 (codec/alignment ::var-array {:word-size 1}))))
+    (testing "2 byte" (is (= 2 (codec/alignment ::var-array {:word-size 2}))))
+    (testing "4 byte" (is (= 2 (codec/alignment ::var-array {:word-size 4})))))
+  (testing "sizeof constant array"
+    (testing "unaligned" (is (= 10 (codec/sizeof ::fixed-array))))
+    (testing "1 byte" (is (= 10 (codec/sizeof ::fixed-array {:word-size 1}))))
+    (testing "2 byte" (is (= 10 (codec/sizeof ::fixed-array {:word-size 2}))))
+    (testing "4 byte" (is (= 10 (codec/sizeof ::fixed-array {:word-size 4})))))
+  (testing "sizeof variable array with encoding"
+    (testing "unaligned" (is (= 8 (codec/sizeof ::var-array {:count 4}))))
+    (testing "1 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 1 :count 4}))))
+    (testing "2 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 2 :count 4}))))
+    (testing "4 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 4 :count 4})))))
+  (testing "sizeof variable array with data"
+    (testing "unaligned" (is (= 8 (codec/sizeof ::var-array {} [1 2 3 4]))))
+    (testing "1 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 1} [1 2 3 4]))))
+    (testing "2 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 2} [1 2 3 4]))))
+    (testing "4 byte" (is (= 8 (codec/sizeof ::var-array {:word-size 4} [1 2 3 4])))))
+  (testing "reading and writing buffer constant array"
+   (let [data (s/conform ::fixed-array [100 200 300 400 500])
+        buffer (.rewind
+                 (to-buffer! ::fixed-array data (ByteBuffer/allocate 40)))]
+    (is (= data (from-buffer! ::fixed-array buffer)))))
+  (testing "reading and writing buffer constant array"
+   (let [data (s/conform ::var-array [100 200 300 400])
+        buffer (.rewind
+                 (to-buffer! ::var-array data (ByteBuffer/allocate 40)))]
+    (is (= data (from-buffer! ::var-array {:count 4} buffer))))))

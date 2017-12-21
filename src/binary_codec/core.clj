@@ -415,51 +415,77 @@
     (repeat pad-value)
     (lazy-seq (cons (first sequence) (lazy-pad (rest sequence) pad-value)))))
 
-; ;; TODO
-; ;; Manage alignment of complex codecs
-; (defn make-fixed-array-codec [count-of c]
-;   (reify Codec
-;     (encode* [_ encoding])
-;     (encoded?* [_] (encoded? c))
-;     (alignment* [_] (alignment c))
-;     (sizeof* [_] (* count-of (sizeof c)))
-;     (sizeof* [_ data])
-;     (to-buffer!* [_ data buffer] )
-;     (from-buffer!* [this buffer])))
-
-; ;;;;BIG TODO
-; ;;;;Figure this varaible array out
-; (defn make-variable-array-codec [c]
-;   (reify Codec
-;     (encode* [_ encoding])
-;     (encoded?* [_] (encoded? c))
-;     (alignment* [_] (alignment c))
-;     (sizeof* [_] nil)
-;     (sizeof* [_ data])
-;     (to-buffer!* [_ data buffer] )
-;     (from-buffer!* [_ buffer])))
-
-
-
-; (defmacro array [codec & {:keys [kind count min-count max-count distinct into]
-;                           :or {kind nil count nil min-count nil max-count nil distinct nil into []}}]
-;   (let [spec (codec-spec codec)
-;         coll-spec `(s/coll-of ~spec
-;                              :kind ~kind 
-;                              :count ~count 
-;                              :min-count ~min-count
-;                              :max-count ~max-count
-;                              :distinct ~distinct
-;                              :into ~into)
-;         c `(if (number? ~count)
-;              (make-fixed-array-codec ~count ~codec)
-;              (make-variable-array-codec ~codec))]
-;     `(with-meta ~c {:spec ~coll-spec})))
+(defn make-fixed-array-codec [count-of c]
+  (reify Codec
+    (encoder* [_ encoding] (encoder c encoding))
+    (alignment* [_ encoding] (unchecked-alignment c encoding))
+    (sizeof* [_ encoding] 
+      (if-let [size (unchecked-sizeof c encoding)]
+        (* count-of (+ size (alignment-padding (unchecked-alignment c encoding) size)))
+        nil))
+    (sizeof* [_ encoding data]
+      (if (= count-of (count data))
+        (reduce (fn [accum elem]
+                  (if-let [size (unchecked-sizeof c encoding elem)]
+                    (+ accum size (alignment-padding (unchecked-alignment c encoding) accum))
+                    (reduced nil)))
+                0
+                data)
+        nil))
+    (to-buffer!* [_ encoding data buffer] 
+      (doseq [elem data]
+        (unchecked-to-buffer! c encoding elem buffer))
+      buffer)
+    (from-buffer!* [this encoding buffer]
+      (into [] (doall (map #(unchecked-from-buffer! %1 encoding buffer) (repeat count-of c)))))))
 
 
-; (s/def ::index-map (s/* (s/tuple number? map?)))
-; (s/def ::tuple-encoding (s/merge ::base-encoding
-                                 ; (s/keys :req-un [:byte-order :word-size])))
+;;;;BIG TODO
+;;;;Figure this varaible array out
+(defn make-variable-array-codec [c]
+  (reify Codec
+    (encoder* [_ encoding] (encoder c encoding))
+    (alignment* [_ encoding] (unchecked-alignment c encoding))
+    (sizeof* [_ encoding] nil
+      (if-let [count-of (:count encoding)]
+        (if-let [size (unchecked-sizeof c encoding)]
+          (* count-of (+ size (alignment-padding (unchecked-alignment c encoding) size)))
+          nil)
+        (throw (IllegalArgumentException. 
+                 "Unable to determine the size of the array.  Either pass some data, or use the :count field of the encoding"))))
+    (sizeof* [_ encoding data]
+      (reduce (fn [accum elem]
+                (if-let [size (unchecked-sizeof c encoding elem)]
+                  (+ accum size (alignment-padding (unchecked-alignment c encoding) accum))
+                  (reduced nil)))
+              0
+              data))
+      (to-buffer!* [_ encoding data buffer]
+        (doseq [elem data]
+          (unchecked-to-buffer! c encoding elem buffer))
+        buffer)
+    (from-buffer!* [this encoding buffer]
+      (if-let [count-of (:count encoding)]
+        (into [] (doall (map #(unchecked-from-buffer! %1 encoding buffer) (repeat count-of c))))
+        (throw (IllegalArgumentException. 
+                 "Unable to determine the size of the array.  Use the :count field of the encoding"))))))
+
+
+(defmacro array [codec & {:keys [kind count min-count max-count distinct into]
+                          :or {kind nil count nil min-count nil max-count nil distinct nil into []}}]
+  (let [spec (codec-spec codec)
+        coll-spec `(s/coll-of ~spec
+                             :kind ~kind 
+                             :count ~count 
+                             :min-count ~min-count
+                             :max-count ~max-count
+                             :distinct ~distinct
+                             :into ~into)
+        c `(if (number? ~count)
+             (make-fixed-array-codec ~count ~codec)
+             (make-variable-array-codec ~codec))]
+    `(with-meta ~c {:spec ~coll-spec})))
+
 (defn tuple-impl [codecs specs]
     (with-meta 
        (reify Codec
@@ -488,7 +514,7 @@
                        (+ accum size (alignment-padding (unchecked-alignment c enc) accum))
                        (reduced nil)))
                    0
-                   (map vector codecs encoding data)))
+                   (map vector codecs encoding (lazy-pad data nil))))
          (to-buffer!* [_ encoding data buffer]
            (doseq [[codec enc elem] (map vector codecs encoding data)]
              (unchecked-to-buffer! codec enc elem buffer))
