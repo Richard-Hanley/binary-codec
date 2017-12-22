@@ -111,6 +111,16 @@
 (defn defcodec [k c]
   (swap! registry-ref assoc k c))
 
+
+(defn spec-maybe-auto [spec]
+  "Takes a spec, and wraps it so that the result may be auto"
+  (s/conformer
+    (fn [value]
+      (if (= value ::auto)
+        value
+        (s/conform spec value)))))
+
+
 (defmacro def 
   "Function used to define a global codec, a la spec.  It takes a fully qualified keyword
   as and a codec, and adds that codec to the registry
@@ -123,25 +133,15 @@
    (let [spec `(codec-spec ~c)]
      `(do
         (defcodec ~k ~c)
-        (s/def ~k ~spec)
+        (s/def ~k (spec-maybe-auto ~spec))
         ~k)))
   ([k c s]
    (let [cs `(codec-spec ~c)
          spec `(s/and ~s ~cs)]
      `(do
         (defcodec ~k ~c)
-        (s/def ~k ~spec)
+        (s/def ~k (spec-maybe-auto ~spec))
         ~k))))
-
-; (defn seq-to-field-map [field-keys]
-;   (into (array-map) (map vector field-keys field-keys)))
-
-; (defmacro defstruct [k & fields]
-;   (let [field-keys (map eval fields)
-;         field-map (seq-to-field-map field-keys)]
-;     `(do
-;        (s/def ~k (s/keys :req [~@field-keys]))
-;        (defcodec ~k ~field-map))))
 
 (defn- resolve-codec [codec-or-k]
   (if-let [codec (reg-resolve codec-or-k)]
