@@ -136,21 +136,25 @@
   the same keyword
   
   If a spec is also given as an argument, then it will be combined with the codec spec"
-  ([k c] 
-   (let [spec `(codec-spec ~c)]
-     `(do
-        (defcodec ~k ~c)
-        (s/def ~k ~(form-codec-spec c nil nil))
-        ~k)))
-  ([k c s]
-   (let [cs `(codec-spec ~c)
-         spec `(s/and ~s ~cs)]
-     `(do
-        (defcodec ~k ~c)
-        ; (s/def ~k (spec-maybe-auto ~spec))
-        ; (s/def ~k ~spec)
-        (s/def ~k ~(form-codec-spec c s nil))
-        ~k))))
+  [keyword codec & {:keys [spec post-spec]
+                    :or {spec nil, post-spec nil}}]
+  `(do
+     (defcodec ~keyword ~codec)
+     (s/def ~keyword ~(form-codec-spec codec spec post-spec))
+     ~keyword))
+  ; ([k c] 
+  ;  (let [spec `(codec-spec ~c)]
+  ;    `(do
+  ;       (defcodec ~k ~c)
+  ;       (s/def ~k ~(form-codec-spec c nil nil))
+  ;       ~k)))
+  ; ([k c s]
+  ;  (let [cs `(codec-spec ~c)
+  ;        spec `(s/and ~s ~cs)]
+  ;    `(do
+  ;       (defcodec ~k ~c)
+  ;       (s/def ~k ~(form-codec-spec c s nil))
+  ;       ~k))))
 
 (defn- resolve-codec [codec-or-k]
   (if-let [codec (reg-resolve codec-or-k)]
@@ -296,7 +300,7 @@
     (sizeof* [_ _ _] Byte/BYTES)
     (to-buffer!* [_ _ data buffer] (.put buffer data))
     (from-buffer!* [_ _ buffer] (.get buffer)))
-  (make-signed-integral-conformer byte))
+  :spec (make-signed-integral-conformer byte))
 
 (binary-codec.core/def
   ::int16
@@ -309,7 +313,7 @@
       (buffer-op-with-endian (:byte-order encoding) #(.putShort % data) buffer))
     (from-buffer!* [_ encoding buffer]
       (buffer-op-with-endian (:byte-order encoding) #(.getShort %) buffer)))
-  (make-signed-integral-conformer short))
+  :spec (make-signed-integral-conformer short))
 
 (binary-codec.core/def 
   ::int32
@@ -322,7 +326,7 @@
       (buffer-op-with-endian (:byte-order encoding) #(.putInt % data) buffer))
     (from-buffer!* [_ encoding buffer]
       (buffer-op-with-endian (:byte-order encoding) #(.getInt %) buffer)))
-  (make-signed-integral-conformer int))
+  :spec (make-signed-integral-conformer int))
 
 (binary-codec.core/def 
   ::int64
@@ -335,11 +339,11 @@
       (buffer-op-with-endian (:byte-order encoding) #(.putLong % data) buffer))
     (from-buffer!* [_ encoding buffer]
       (buffer-op-with-endian (:byte-order encoding) #(.getLong %) buffer)))
-  (make-signed-integral-conformer long))
+  :spec (make-signed-integral-conformer long))
 
-(binary-codec.core/def ::uint8 ::int8 (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
-(binary-codec.core/def ::uint16 ::int16 (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
-(binary-codec.core/def ::uint32 ::int32 (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
+(binary-codec.core/def ::uint8 ::int8 :spec (make-unsigned-integral-conformer Byte/SIZE byte unchecked-byte))
+(binary-codec.core/def ::uint16 ::int16 :spec (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
+(binary-codec.core/def ::uint32 ::int32 :spec (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
 (defn lazy-pad
   "Returns a lazy sequence which pads sequence with pad-value."

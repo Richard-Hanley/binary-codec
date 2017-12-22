@@ -401,9 +401,9 @@
       (is (= data (from-buffer! ::tfoo buffer))))))
 
 (codec/def ::mfoo (codec/struct
-                    (codec/def ::bar ::codec/uint8 (s/int-in 12 20))
-                    (codec/def ::baz ::codec/int64 odd?)
-                    (codec/unqualified (codec/def ::bane ::codec/int16 #{1 2 4 8 754}))))
+                    (codec/def ::bar ::codec/uint8 :spec (s/int-in 12 20))
+                    (codec/def ::baz ::codec/int64 :spec odd?)
+                    (codec/unqualified (codec/def ::bane ::codec/int16 :spec #{1 2 4 8 754}))))
 (deftest test-struct
   (testing "alignment"
     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
