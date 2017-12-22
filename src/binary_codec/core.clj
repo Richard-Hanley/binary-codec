@@ -620,7 +620,27 @@
         spec `(form-keys ~flds)]
           `(struct-impl ~flds (eval ~spec))))
 
-; (defn align 
+(defn resolver 
+  "Creates a special conformer that is used to fill in ::codec/auto fields in a map or vector
+
+  value-fn is a function that the data structure, and returns the auto-calcualted value
+
+  ks is a sequence of keys used by assoc-in and get-in that will be used to fill in the
+  auto-calculated value
+
+  ks-spec is a spec used to verify that the result from the value-fn is valid for that particular
+  field"
+  [value-fn ks ks-spec]
+  (s/conformer
+    (fn [data]
+      (let [val (s/conform ks-spec (value-fn data))
+            field-to-update (get-in data ks)]
+        (cond
+          (= val field-to-update) data                      ;The field to update is already the correct format
+          (= field-to-update ::auto) (assoc-in data ks val) ;Associate the new value to the field
+          :else ::s/invalid)))))
+
+
 ;   "Similar to the __align pragma in C, this can be used to add extra alignment padding
 ;   to a single codec.  Will not affect the internal structure of the codec.  To do that, you
 ;   should use the encode function"
