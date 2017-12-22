@@ -396,7 +396,7 @@
 
 
 (defmacro array [codec & {:keys [kind count min-count max-count distinct into]
-                          :or {kind nil count nil min-count nil max-count nil distinct nil into []}}]
+                          :or {kind nil count nil min-count nil max-count nil distinct nil}}]
   (let [spec (codec-spec codec)
         coll-spec `(s/coll-of ~spec
                              :kind ~kind 
@@ -404,7 +404,7 @@
                              :min-count ~min-count
                              :max-count ~max-count
                              :distinct ~distinct
-                             :into ~into)
+                             :into [])
         c `(if (number? ~count)
              (make-fixed-array-codec ~count ~codec)
              (make-variable-array-codec ~codec))]
