@@ -120,12 +120,11 @@
         value
         (s/conform spec value)))))
 
-(defn form-codec-spec [codec spec post-spec]
-  (let [cs (codec-spec codec)
-        all-specs (filter some? [spec cs post-spec])]
+(defn form-codec-spec [base-spec spec post-spec]
+  (let [all-specs (filter some? [spec base-spec post-spec])]
     (if (< 1 (count all-specs))
       `(spec-maybe-auto (s/and ~@all-specs))
-      `(spec-maybe-auto (codec-spec ~codec)))))
+      `(spec-maybe-auto ~base-spec))))
 
 
 (defmacro def 
@@ -138,23 +137,11 @@
   If a spec is also given as an argument, then it will be combined with the codec spec"
   [keyword codec & {:keys [spec post-spec]
                     :or {spec nil, post-spec nil}}]
+  (let [cs `(codec-spec ~codec)]
   `(do
      (defcodec ~keyword ~codec)
-     (s/def ~keyword ~(form-codec-spec codec spec post-spec))
-     ~keyword))
-  ; ([k c] 
-  ;  (let [spec `(codec-spec ~c)]
-  ;    `(do
-  ;       (defcodec ~k ~c)
-  ;       (s/def ~k ~(form-codec-spec c nil nil))
-  ;       ~k)))
-  ; ([k c s]
-  ;  (let [cs `(codec-spec ~c)
-  ;        spec `(s/and ~s ~cs)]
-  ;    `(do
-  ;       (defcodec ~k ~c)
-  ;       (s/def ~k ~(form-codec-spec c s nil))
-  ;       ~k))))
+     (s/def ~keyword ~(form-codec-spec cs spec post-spec))
+     ~keyword)))
 
 (defn- resolve-codec [codec-or-k]
   (if-let [codec (reg-resolve codec-or-k)]
@@ -640,6 +627,23 @@
           (= field-to-update ::auto) (assoc-in data ks val) ;Associate the new value to the field
           :else ::s/invalid)))))
 
+
+(defn constant
+  "Creates a special conformer similar to a resolver.  However, instead of using a value function
+  this takes a single value.  It always associates this value, regardless of what is in the data
+  
+  It can optionally take a spec, that will be used to verify the data"
+  ([value ks]
+   (s/conformer
+     (fn [data]
+       (assoc-in data ks value))))
+  ([value ks ks-spec]
+   (s/conformer
+     (fn [data]
+       (let [v (s/conform ks-spec value)]
+         (if (s/invalid? v)
+           v
+           (assoc-in data ks value)))))))
 
 ;   "Similar to the __align pragma in C, this can be used to add extra alignment padding
 ;   to a single codec.  Will not affect the internal structure of the codec.  To do that, you
