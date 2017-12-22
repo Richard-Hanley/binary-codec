@@ -120,6 +120,13 @@
         value
         (s/conform spec value)))))
 
+(defn form-codec-spec [codec spec post-spec]
+  (let [cs (codec-spec codec)
+        all-specs (filter some? [spec cs post-spec])]
+    (if (< 1 (count all-specs))
+      `(spec-maybe-auto (s/and ~@all-specs))
+      `(spec-maybe-auto (codec-spec ~codec)))))
+
 
 (defmacro def 
   "Function used to define a global codec, a la spec.  It takes a fully qualified keyword
@@ -133,14 +140,16 @@
    (let [spec `(codec-spec ~c)]
      `(do
         (defcodec ~k ~c)
-        (s/def ~k (spec-maybe-auto ~spec))
+        (s/def ~k ~(form-codec-spec c nil nil))
         ~k)))
   ([k c s]
    (let [cs `(codec-spec ~c)
          spec `(s/and ~s ~cs)]
      `(do
         (defcodec ~k ~c)
-        (s/def ~k (spec-maybe-auto ~spec))
+        ; (s/def ~k (spec-maybe-auto ~spec))
+        ; (s/def ~k ~spec)
+        (s/def ~k ~(form-codec-spec c s nil))
         ~k))))
 
 (defn- resolve-codec [codec-or-k]
