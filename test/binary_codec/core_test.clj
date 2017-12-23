@@ -436,6 +436,24 @@
     (is (= data (from-buffer! ::mfoo buffer))))
   (testing "individual key encoding"))
 
+
+(codec/def 
+  ::dependent
+  (codec/struct 
+    (codec/def ::length ::codec/uint8)
+    (codec/def ::some-data ::codec/uint32)
+    (codec/def ::multiplier ::codec/uint8)
+    (codec/def ::calculated ::codec/uint32)))
+  ; :spec (s/and (codec/constant (byte (codec/sizeof ::dependent)) [::length])
+               ; (codec/constant 3 [::length] ::length)))
+  ; :post-spec (codec/resolver #(* (::multipler %) (::some-data %)) [::calculated] ::calculated))
+
+(deftest dependent-spec
+  (testing "constants always added"
+    (testing "added if nil"
+      (is (s/valid? ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto})))
+    )
+  )
 ; (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 ; (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})
 ; (codec/def ::foob {::length ::codec/uint8 ::type ::codec/uint8 ::b ::codec/uint16})
