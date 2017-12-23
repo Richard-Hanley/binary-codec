@@ -443,17 +443,30 @@
     (codec/def ::length ::codec/uint8)
     (codec/def ::some-data ::codec/uint32)
     (codec/def ::multiplier ::codec/uint8)
-    (codec/def ::calculated ::codec/uint32)))
+    (codec/def ::calculated ::codec/uint32))
+  ; :spec 
+  :spec (s/and (codec/constant 3 [::multiplier] ::multiplier)
+               (codec/constant (byte (codec/sizeof ::dependent)) [::length])
+               (codec/resolver #(* (::multiplier %) (::some-data %)) [::calculated] ::calculated)))
   ; :spec (s/and (codec/constant (byte (codec/sizeof ::dependent)) [::length])
-               ; (codec/constant 3 [::length] ::length)))
+  ;              (codec/constant 3 [::multiplier] ::multiplier))
   ; :post-spec (codec/resolver #(* (::multipler %) (::some-data %)) [::calculated] ::calculated))
 
 (deftest dependent-spec
   (testing "constants always added"
-    (testing "added if nil"
-      (is (s/valid? ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto})))
-    )
-  )
+    (let [expected-value {::length 10
+                          ::some-data 5
+                          ::multiplier 3
+                          ::calculated 15}]
+      (testing "added if auto"
+        (is (s/valid? ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto}))
+        (is (= expected-value (s/conform ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto}))))
+      (testing "works if correct value is in struct"
+        (is (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15}))
+        (is (= expected-value (s/conform ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto})))))
+    (testing "fields fail if resolved value is wrong"
+      (is (not (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated nil}))))))
+
 ; (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 ; (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})
 ; (codec/def ::foob {::length ::codec/uint8 ::type ::codec/uint8 ::b ::codec/uint16})
