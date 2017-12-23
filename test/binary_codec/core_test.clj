@@ -440,17 +440,13 @@
 (codec/def 
   ::dependent
   (codec/struct 
-    (codec/def ::length ::codec/uint8)
+    (codec/def ::length ::codec/uint8 :auto-resolve true)
     (codec/def ::some-data ::codec/uint32)
-    (codec/def ::multiplier ::codec/uint8)
-    (codec/def ::calculated ::codec/uint32))
-  ; :spec 
+    (codec/def ::multiplier ::codec/uint8 :auto-resolve true)
+    (codec/def ::calculated ::codec/uint32 :auto-resolve true))
   :spec (s/and (codec/constant 3 [::multiplier] ::multiplier)
                (codec/constant (byte (codec/sizeof ::dependent)) [::length])
                (codec/resolver #(* (::multiplier %) (::some-data %)) [::calculated] ::calculated)))
-  ; :spec (s/and (codec/constant (byte (codec/sizeof ::dependent)) [::length])
-  ;              (codec/constant 3 [::multiplier] ::multiplier))
-  ; :post-spec (codec/resolver #(* (::multipler %) (::some-data %)) [::calculated] ::calculated))
 
 (deftest dependent-spec
   (testing "constants always added"
@@ -459,13 +455,13 @@
                           ::multiplier 3
                           ::calculated 15}]
       (testing "added if auto"
-        (is (s/valid? ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto}))
-        (is (= expected-value (s/conform ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto}))))
+        (is (s/valid? ::dependent {::length nil ::some-data 5 ::multiplier nil ::calculated nil}))
+        (is (= expected-value (s/conform ::dependent {::length nil ::some-data 5 ::multiplier nil ::calculated nil}))))
       (testing "works if correct value is in struct"
         (is (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15}))
-        (is (= expected-value (s/conform ::dependent {::length ::codec/auto ::some-data 5 ::multiplier ::codec/auto ::calculated ::codec/auto})))))
+        (is (= expected-value (s/conform ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15})))))
     (testing "fields fail if resolved value is wrong"
-      (is (not (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated nil}))))))
+      (is (not (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 13}))))))
 
 ; (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 ; (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})

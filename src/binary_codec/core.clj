@@ -112,19 +112,23 @@
   (swap! registry-ref assoc k c))
 
 
-(defn spec-maybe-auto [spec]
-  "Takes a spec, and wraps it so that the result may be auto"
-  (s/conformer
-    (fn [value]
-      (if (= value ::auto)
-        value
-        (s/conform spec value)))))
+; (defn spec-maybe-auto [spec]
+;   "Takes a spec, and wraps it so that the result may be auto"
+;   (s/conformer
+;     (fn [value]
+;       (if (= value ::auto)
+;         value
+;         (s/conform spec value)))))
 
-(defn form-codec-spec [base-spec spec post-spec]
-  (let [all-specs (filter some? [spec base-spec post-spec])]
-    (if (< 1 (count all-specs))
-      `(spec-maybe-auto (s/and ~@all-specs))
-      `(spec-maybe-auto ~base-spec))))
+(defn form-codec-spec [base-spec spec post-spec auto-resolve]
+  (let [all-specs (filter some? [spec base-spec post-spec])
+    
+        final-spec (if (< 1 (count all-specs))
+                     `(s/and ~@all-specs)
+                     `~base-spec)]
+    (if auto-resolve
+      `(s/nilable ~final-spec)
+      final-spec)))
 
 
 (defmacro def 
@@ -135,12 +139,12 @@
   the same keyword
   
   If a spec is also given as an argument, then it will be combined with the codec spec"
-  [keyword codec & {:keys [spec post-spec]
-                    :or {spec nil, post-spec nil}}]
+  [keyword codec & {:keys [spec post-spec auto-resolve]
+                    :or {spec nil, post-spec nil auto-resolve false}}]
   (let [cs `(codec-spec ~codec)]
   `(do
      (defcodec ~keyword ~codec)
-     (s/def ~keyword ~(form-codec-spec cs spec post-spec))
+     (s/def ~keyword ~(form-codec-spec cs spec post-spec auto-resolve))
      ~keyword)))
 
 (defn- resolve-codec [codec-or-k]
@@ -608,12 +612,12 @@
           `(struct-impl ~flds (eval ~spec))))
 
 (defn resolver 
-  "Creates a special conformer that is used to fill in ::codec/auto fields in a map or vector
+  "Creates a special conformer that is used to fill in nil fields in a map or vector
 
-  value-fn is a function that the data structure, and returns the auto-calcualted value
+  value-fn is a function that the data structure, and returns the nil value
 
   ks is a sequence of keys used by assoc-in and get-in that will be used to fill in the
-  auto-calculated value
+  nil value
 
   ks-spec is a spec used to verify that the result from the value-fn is valid for that particular
   field"
@@ -623,8 +627,8 @@
       (let [val (s/conform ks-spec (value-fn data))
             field-to-update (get-in data ks)]
         (cond
+          (nil? field-to-update) (assoc-in data ks val) ;Associate the new value to the field
           (= val field-to-update) data                      ;The field to update is already the correct format
-          (= field-to-update ::auto) (assoc-in data ks val) ;Associate the new value to the field
           :else ::s/invalid)))))
 
 
