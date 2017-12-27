@@ -513,7 +513,7 @@
     spec))
 
 
-(defn struct-impl [codec-keys data-keys spec encoders]
+(defn struct-impl [codec-keys data-keys spec encoder-functions]
   (with-meta 
     (reify Codec
       (encoder* [_ encoding]
@@ -551,11 +551,15 @@
           (unchecked-to-buffer! ck (get encoding ck) (get data dk) buffer))
         buffer)
       (from-buffer!* [_ encoding buffer]
-        (into {} (doall (map (fn [ck dk]
-                               (let [enc (get encoding ck)
-                                     val (unchecked-from-buffer! ck enc buffer)]
-                                 [dk val]))
-                             codec-keys data-keys)))))
+        (first (reduce (fn [[accum-map accum-encoding] [ck dk enc-fn]]
+                         (let [elem-enc (get accum-encoding ck)
+                               val (unchecked-from-buffer! ck elem-enc buffer)
+                               new-enc (if (some? enc-fn)
+                                         (enc-fn accum-encoding val)
+                                         accum-encoding)]
+                           [(assoc accum-map dk val) new-enc]))
+                       [{} encoding]
+                       (map vector codec-keys data-keys encoder-functions)))))
     {:spec spec}))
 
 
