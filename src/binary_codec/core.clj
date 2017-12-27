@@ -336,6 +336,24 @@
 (binary-codec.core/def ::uint16 ::int16 :spec (make-unsigned-integral-conformer Short/SIZE short unchecked-short))
 (binary-codec.core/def ::uint32 ::int32 :spec (make-unsigned-integral-conformer Integer/SIZE int unchecked-int))
 
+(defn resolver 
+  "Creates a special conformer that is used to fill in nil fields in a map or vector
+
+  value-fn is a function that the data structure, and returns the nil value
+
+  ks is a sequence of keys used by assoc-in and get-in that will be used to fill in the
+  nil value
+
+  ks-spec is a spec used to verify that the result from the value-fn is valid for that particular
+  field"
+  [value-fn ks ks-spec]
+  (s/conformer
+    (fn [data]
+      (let [val (s/conform ks-spec (value-fn data))]
+        (if (s/invalid? val)
+          ::s/invalid
+          (assoc-in data ks val))))))
+
 (defn lazy-pad
   "Returns a lazy sequence which pads sequence with pad-value."
   [sequence pad-value]
@@ -527,57 +545,50 @@
     spec))
 
 
-(defn struct-impl [fields spec]
-  (let[codec-keys (map second fields)
-       data-keys (map
-                    (fn [[qual k]] 
-                      (if (= :req-un qual) 
-                        (keyword (name k)) 
-                        k))
-                    fields)]
-    (with-meta 
-      (reify Codec
-        (encoder* [_ encoding]
-           (if (some? encoding)
-             (let [struct-encoding (merge base-encoding (dissoc encoding :key-map))
-                   key-map (:key-map encoding)]
-               ;Map over the codecs.  If there the index of the codec is in the index-map
-               ;merge it with the global encoding
-               (into {} (map (fn [ck]
-                               [ck (encoder ck (merge struct-encoding (get key-map ck)))])
-                             codec-keys)))
-             (into {} (map #(vector % (encoder %)) codec-keys))))
-        (alignment* [_ encoding] (apply max (map #(unchecked-alignment % (get encoding %)) codec-keys)))
-        (sizeof* [_ encoding]
-          (reduce (fn [accum ck]
-                    (let [enc (get encoding ck)
-                          size (unchecked-sizeof ck enc)]
-                      (if (some? size)
-                        (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
-                        (reduced nil))))
-                  0
-                  codec-keys))
-        (sizeof* [_ encoding data]
-          (reduce (fn [accum [ck dk]]
-                    (let [enc (get encoding ck)
-                          elem (get data dk)
-                          size (unchecked-sizeof ck enc elem)]
-                      (if (some? size)
-                        (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
-                        (reduced nil))))
-                  0
-                  (map vector codec-keys data-keys)))
-        (to-buffer!* [_ encoding data buffer] 
-           (doseq [[ck dk] (map vector codec-keys data-keys)]
-             (unchecked-to-buffer! ck (get encoding ck) (get data dk) buffer))
-           buffer)
-        (from-buffer!* [_ encoding buffer]
-          (into {} (doall (map (fn [ck dk]
-                                 (let [enc (get encoding ck)
-                                       val (unchecked-from-buffer! ck enc buffer)]
-                                   [dk val]))
-                               codec-keys data-keys)))))
-      {:spec spec})))
+(defn struct-impl [codec-keys data-keys spec]
+  (with-meta 
+    (reify Codec
+      (encoder* [_ encoding]
+        (if (some? encoding)
+          (let [struct-encoding (merge base-encoding (dissoc encoding :key-map))
+                key-map (:key-map encoding)]
+            ;Map over the codecs.  If there the index of the codec is in the index-map
+            ;merge it with the global encoding
+            (into {} (map (fn [ck]
+                            [ck (encoder ck (merge struct-encoding (get key-map ck)))])
+                          codec-keys)))
+          (into {} (map #(vector % (encoder %)) codec-keys))))
+      (alignment* [_ encoding] (apply max (map #(unchecked-alignment % (get encoding %)) codec-keys)))
+      (sizeof* [_ encoding]
+        (reduce (fn [accum ck]
+                  (let [enc (get encoding ck)
+                        size (unchecked-sizeof ck enc)]
+                    (if (some? size)
+                      (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
+                      (reduced nil))))
+                0
+                codec-keys))
+      (sizeof* [_ encoding data]
+        (reduce (fn [accum [ck dk]]
+                  (let [enc (get encoding ck)
+                        elem (get data dk)
+                        size (unchecked-sizeof ck enc elem)]
+                    (if (some? size)
+                      (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
+                      (reduced nil))))
+                0
+                (map vector codec-keys data-keys)))
+      (to-buffer!* [_ encoding data buffer] 
+        (doseq [[ck dk] (map vector codec-keys data-keys)]
+          (unchecked-to-buffer! ck (get encoding ck) (get data dk) buffer))
+        buffer)
+      (from-buffer!* [_ encoding buffer]
+        (into {} (doall (map (fn [ck dk]
+                               (let [enc (get encoding ck)
+                                     val (unchecked-from-buffer! ck enc buffer)]
+                                 [dk val]))
+                             codec-keys data-keys)))))
+    {:spec spec}))
 
 
 (defmacro struct 
@@ -602,35 +613,49 @@
   ::bar would have a word size of 8
   ::baz would have a big endian encoding"
   [& fields]
-  (let [proc-fields `[~@fields]
-        flds `(if (s/valid? ::fields ~proc-fields)
-               (s/conform ::fields ~proc-fields)
-               (throw 
-                 (IllegalArgumentException.
-                   (str "Unable to conform fields \n" (s/explain-str ::fields ~proc-fields)))))
-        spec `(form-keys ~flds)]
-          `(struct-impl ~flds (eval ~spec))))
+  `(let [args# (s/conform ::struct-args (doall [~@fields]))
+         struct-args# (if (s/invalid? args#)
+                        (throw (IllegalArgumentException.
+                                 (str "Unable to conform field arguments " (s/explain-str ::struct-args
+                                                                                          args#))))
+                        args#)
+         flds# (map (fn [[register-type# arg#]]
+                         (if (= :registered register-type#)
+                           (field arg#)
+                           arg#))
+                    struct-args#)
+         codec-keys# (map :codec flds#)
+         data-keys# (map #(if (:unqualified %) (keyword (name (:codec %))) (:codec %)) flds#)
+         qualified-keys# (map :codec (filter (complement :unqualified) flds#))
+         unqualified-keys# (map :codec (filter :unqualified flds#))
+         spec# (make-keys qualified-keys# unqualified-keys#)]
+     (struct-impl codec-keys# data-keys# spec#)))
 
-(defn resolver 
-  "Creates a special conformer that is used to fill in nil fields in a map or vector
+(defrecord Field [codec unqualified encoder])
 
-  value-fn is a function that the data structure, and returns the nil value
+(s/def ::registered-codec (s/and ::fully-qualified-keyword
+                                 s/get-spec 
+                                 get-codec))
 
-  ks is a sequence of keys used by assoc-in and get-in that will be used to fill in the
-  nil value
+(defn field [codec-key & {:keys [encoder unqualified]
+                           :or {encoder nil unqualified false}}]
+  (let [codec (s/conform ::registered-codec codec-key)]
+    (if (s/invalid? codec)
+      ::s/invalid
+      (map->Field {:codec codec 
+                   :unqualified unqualified 
+                   :encoder encoder}))))
 
-  ks-spec is a spec used to verify that the result from the value-fn is valid for that particular
-  field"
-  [value-fn ks ks-spec]
-  (s/conformer
-    (fn [data]
-      (let [val (s/conform ks-spec (value-fn data))
-            field-to-update (get-in data ks)]
-        (cond
-          (nil? field-to-update) (assoc-in data ks val) ;Associate the new value to the field
-          (= val field-to-update) data                      ;The field to update is already the correct format
-          :else ::s/invalid)))))
+(s/def ::struct-arg (s/or :registered ::registered-codec
+                          :field (partial instance? Field)))
 
+(s/def ::struct-args (s/coll-of ::struct-arg))
+
+(defmacro make-keys [req req-un]
+  (let [r `(doall ~req)
+        ru `(doall ~req-un)
+        k `(s/keys :req [~@r] :req-un [~@ru])]
+    `~k))
 
 (defn constant
   "Creates a special conformer similar to a resolver.  However, instead of using a value function

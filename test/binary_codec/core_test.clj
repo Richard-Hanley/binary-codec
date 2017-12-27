@@ -403,7 +403,7 @@
 (codec/def ::mfoo (codec/struct
                     (codec/def ::bar ::codec/uint8 :spec (s/int-in 12 20))
                     (codec/def ::baz ::codec/int64 :spec odd?)
-                    (codec/unqualified (codec/def ::bane ::codec/int16 :spec #{1 2 4 8 754}))))
+                    (codec/field (codec/def ::bane ::codec/int16 :spec #{1 2 4 8 754}) :unqualified true)))
 (deftest test-struct
   (testing "alignment"
     (testing "unaligned" (is (= 11 (sizeof ::mfoo))))
@@ -460,9 +460,7 @@
         (is (= [Byte Integer Byte Integer] (map type (vals (s/conform ::dependent {::length nil ::some-data 5 ::multiplier nil ::calculated nil}))))))
       (testing "works if correct value is in struct"
         (is (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15}))
-        (is (= expected-value (s/conform ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15})))))
-    (testing "fields fail if resolved value is wrong"
-      (is (not (s/valid? ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 13}))))))
+        (is (= expected-value (s/conform ::dependent {::length 10 ::some-data 5 ::multiplier 3 ::calculated 15})))))))
 
 ; (codec/def ::base-foo {::length ::codec/uint8 ::type ::codec/uint8})
 ; (codec/def ::fooa {::length ::codec/uint8 ::type ::codec/uint8 ::a ::codec/uint8})
