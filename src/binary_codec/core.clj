@@ -537,18 +537,30 @@
                 0
                 codec-keys))
       (sizeof* [_ encoding data]
-        (reduce (fn [accum [ck dk]]
-                  (let [enc (get encoding ck)
-                        elem (get data dk)
-                        size (unchecked-sizeof ck enc elem)]
-                    (if (some? size)
-                      (+ accum size (alignment-padding (unchecked-alignment ck enc) accum))
-                      (reduced nil))))
-                0
-                (map vector codec-keys data-keys)))
+        (first (reduce (fn [[accum-size accum-encoding] [ck dk enc-fn]]
+                         (let [elem-enc (get encoding ck)
+                               elem (get data dk)
+                               new-encoding (if (some? enc-fn)
+                                              (enc-fn accum-encoding elem)
+                                              accum-encoding)
+                               elem-size (unchecked-sizeof ck elem-enc elem)]
+                           (if (some? elem-size)
+                             [(+ accum-size elem-size (alignment-padding (unchecked-alignment ck elem-enc) accum-size))
+                              new-encoding ]
+                             (reduced nil))))
+                       [0 encoding]
+                       (map vector codec-keys data-keys encoder-functions))))
       (to-buffer!* [_ encoding data buffer] 
-        (doseq [[ck dk] (map vector codec-keys data-keys)]
-          (unchecked-to-buffer! ck (get encoding ck) (get data dk) buffer))
+        (doall (reduce (fn [accum-encoding [ck dk enc-fn]]
+                         (let [elem-enc (get accum-encoding ck)
+                               val (get data dk)
+                               new-encoding (if (some? enc-fn)
+                                              (enc-fn accum-encoding val)
+                                              accum-encoding)
+                               _ (unchecked-to-buffer! ck elem-enc val buffer)]
+                           new-encoding))
+                       encoding
+                       (map vector codec-keys data-keys encoder-functions)))
         buffer)
       (from-buffer!* [_ encoding buffer]
         (first (reduce (fn [[accum-map accum-encoding] [ck dk enc-fn]]
