@@ -432,7 +432,7 @@
              (make-variable-array-codec ~codec))]
     `(with-meta ~c {:spec ~coll-spec})))
 
-(defn tuple-impl [codecs specs]
+(defn tuple-impl [codecs specs encoders]
     (with-meta 
        (reify Codec
          (encoder* [_ encoding]
@@ -486,55 +486,23 @@
   Element 0 would be encoded in little
   Element 1 would be in big endian
   Element 2 would be in network endian"
-  [& codecs]
-  (let [specs (mapv codec-spec codecs)
-        tuple-spec `(s/tuple ~@specs)]
-    `(tuple-impl [~@codecs] ~tuple-spec)))
-
-
-;; A fully qualified keyword is both a keyowrd and has a namespace
-(s/def ::fully-qualified-keyword (s/and keyword
-                                        namespace))
-
-;; A field is made up of either a tuple of [qualified-keyword raw-keyword]
-;; or it is simply a fully-qualfied keyword.
-;; This spec is used to detemine which type is being used
-(s/def ::field-type (s/or :destructured (s/tuple #{:req :req-un} ::fully-qualified-keyword)
-                          :raw ::fully-qualified-keyword))
-
-(s/def ::field-type-conformer (s/conformer
-                                (fn [k-or-tuple]
-                                  (let [[k-type k-value] (s/conform ::field-type k-or-tuple)]
-                                    (case k-type
-                                      :destructured k-value
-                                      :raw [:req k-value])))))
-
-(s/def ::field-is-keyword (comp keyword? second))
-(s/def ::keyword-is-registered (comp specified-codec? second))
-
-;; A field must be a tuple that has a fully qualified keyword for spec, and then a possibly unqualified field
-(s/def ::field (s/and ::field-type-conformer
-                      ::field-is-keyword 
-                      ::keyword-is-registered))
-
-
-(defn unqualified 
-  "Produces a tuple of the passed keyword and an unqualified version of the keyword
-  This function can be used to force a struct to use the unqualified keyword for a field"
-  [k]
-  (if (s/valid? ::fully-qualified-keyword k)
-    [:req-un k]
-    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
-  
-(defn qualified 
-  "Produces a tuple of fully qualified keyword followed by the same fully qualified keyword
-  Usually you do not need this function, and can instead pass a single keyword directly to a struct"
-  [k]
-  (if (s/valid? ::fully-qualified-keyword k)
-    [:req k]
-    (throw (IllegalArgumentException. (str "Passed keyword is not fully qualified " k)))))
-
-(s/def ::fields (s/coll-of ::field :into []))
+  [& codecs-or-fields]
+  (let [args (s/conform ::tuple-args (doall codecs-or-fields))
+        tuple-args (if (s/invalid? args)
+                    (throw
+                     (IllegalArgumentException.
+                      (str "Unable to conform tuple arugments " (s/explain-str ::tuple-args args))))
+                    args)
+         fields (map (fn [[register-type arg]]
+                         (if (= :field register-type)
+                           arg
+                           (field arg)))
+                    tuple-args)
+        codecs (mapv :codec fields)
+        specs (mapv (comp codec-spec :codec) fields)
+        tuple-spec `(s/tuple ~@specs)
+        encoders (mapv :encoder fields)]
+    `(tuple-impl [~@codecs] ~tuple-spec ~encoders)))
 
 (defn form-keys [fields]
   (let [extract-fields (fn [k flds]
@@ -545,7 +513,7 @@
     spec))
 
 
-(defn struct-impl [codec-keys data-keys spec]
+(defn struct-impl [codec-keys data-keys spec encoders]
   (with-meta 
     (reify Codec
       (encoder* [_ encoding]
@@ -628,8 +596,9 @@
          data-keys# (map #(if (:unqualified %) (keyword (name (:codec %))) (:codec %)) flds#)
          qualified-keys# (map :codec (filter (complement :unqualified) flds#))
          unqualified-keys# (map :codec (filter :unqualified flds#))
-         spec# (make-keys qualified-keys# unqualified-keys#)]
-     (struct-impl codec-keys# data-keys# spec#)))
+         spec# (make-keys qualified-keys# unqualified-keys#)
+         encoders# (map :encoder flds#)]
+     (struct-impl codec-keys# data-keys# spec# encoders#)))
 
 (defrecord Field [codec unqualified encoder])
 
@@ -650,6 +619,12 @@
                           :field (partial instance? Field)))
 
 (s/def ::struct-args (s/coll-of ::struct-arg))
+
+(s/def ::tuple-arg (s/or :registered ::registered-codec
+                         :field (partial instance? Field)
+                         :raw codec?))
+
+(s/def ::tuple-args (s/coll-of ::tuple-arg))
 
 (defmacro make-keys [req req-un]
   (let [r `(doall ~req)
